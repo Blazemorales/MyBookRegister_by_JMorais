@@ -301,30 +301,43 @@ class DataProcessor:
         return True
     
     def salvar_dados_tratados(self):
-        """Salva dados tratados em banco_de_dados_tratados."""
+        """Salva dados tratados em banco_de_dados_tratados e amostras/resultados."""
         # Criar pasta de destino usando raiz do projeto
         pasta_saida = os.path.join(self.raiz_projeto, 'banco_de_dados_tratados')
-        
+
         if not os.path.exists(pasta_saida):
             os.makedirs(pasta_saida)
             print(f"✓ Pasta criada: {pasta_saida}")
-        
+
+        # Pasta de resultados consumida pela rota /results/cep/<chart>
+        pasta_resultados = os.path.join(self.diretorio_script, 'resultados')
+        if not os.path.exists(pasta_resultados):
+            os.makedirs(pasta_resultados)
+            print(f"✓ Pasta criada: {pasta_resultados}")
+
         # Salvar cada tipo de chart em arquivo separado
         for idx, dados in enumerate(self.dados_tratados):
             chart_type = dados.get("chart")
             nome_arquivo = f"dados_tratados_{chart_type}_{idx}.json"
             caminho_saida = os.path.join(pasta_saida, nome_arquivo)
-            
+
             with open(caminho_saida, 'w', encoding='utf-8') as f:
                 json.dump(dados, f, indent=4, ensure_ascii=False)
-            
+
             print(f"✓ Dados tratados salvos: {nome_arquivo}")
-        
+
+            # Também salvar em amostras/resultados/<chart>.json (nome simplificado)
+            nome_simples = f"{chart_type.lower()}.json"
+            caminho_resultado = os.path.join(pasta_resultados, nome_simples)
+            with open(caminho_resultado, 'w', encoding='utf-8') as f:
+                json.dump(dados, f, indent=4, ensure_ascii=False)
+            print(f"✓ Resultado salvo: amostras/resultados/{nome_simples}")
+
         # Salvar também um índice com todos os dados
         caminho_indice = os.path.join(pasta_saida, 'indice_dados.json')
         with open(caminho_indice, 'w', encoding='utf-8') as f:
             json.dump(self.dados_tratados, f, indent=4, ensure_ascii=False)
-        
+
         print(f"✓ Índice salvo: indice_dados.json")
         return True
     
