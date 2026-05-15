@@ -42,7 +42,7 @@ def debug_caminhos():
     # Testar DataProcessor
     print("\n🔄 Testando DataProcessor:")
     try:
-        from amostras.data_processor import DataProcessor
+        from CEP.amostras.data_processor import DataProcessor
         dp = DataProcessor()
         print(f"  ✓ DataProcessor importado")
         print(f"  ✓ Raiz do projeto (DataProcessor): {dp.raiz_projeto}")
@@ -59,7 +59,7 @@ def debug_caminhos():
     # Testar Cartas
     print("\n📊 Testando Cartas:")
     try:
-        from cartas_controle.Cartas import Cartas
+        from CEP.cartas_controle.Cartas import Cartas
         caminho_dados, caminho_rel = Cartas.obter_caminhos()
         print(f"  ✓ Cartas importado")
         print(f"    Caminho dados tratados: {caminho_dados}")

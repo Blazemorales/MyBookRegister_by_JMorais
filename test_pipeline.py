@@ -13,7 +13,7 @@ def main():
     print("="*70 + "\n")
     
     # Importar após adicionar ao path
-    from cartas_controle.main import Main
+    from CEP.cartas_controle.main import Main
     
     # Executar pipeline completo
     sucesso = Main.executar_completo('dados_producao_total.json')

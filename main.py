@@ -32,7 +32,7 @@ def home():
 def processar():
     """Processa dados brutos e gera todos os relatórios."""
     try:
-        from cartas_controle.main import Main
+        from CEP.cartas_controle.main import Main
         if Main.executar_completo():
             return jsonify({"status": "sucesso", "message": "Dados processados e relatórios gerados"}), 200
         else:
@@ -44,7 +44,7 @@ def processar():
 def relatorio_xr():
     """Retorna relatório XR."""
     try:
-        from cartas_controle.main import Main
+        from CEP.cartas_controle.main import Main
         Main.x()
         caminho_pdf = os.path.join(PASTA_RELATORIOS, "relatorio_XR.pdf")
         if os.path.exists(caminho_pdf):
@@ -58,7 +58,7 @@ def relatorio_p():
     """Retorna relatório P."""
     try:
         # Assegura que os dados tratados existam gerando o índice se necessário
-        from cartas_controle.main import Main
+        from CEP.cartas_controle.main import Main
         Main.processar_dados()
         # Tenta gerar o relatório P
         Main.p()
@@ -74,7 +74,7 @@ def relatorio_u():
     """Retorna relatório U."""
     try:
         # Assegura que os dados tratados existam gerando o índice se necessário
-        from cartas_controle.main import Main
+        from CEP.cartas_controle.main import Main
         Main.processar_dados()
         # Tenta gerar o relatório U
         Main.u()
@@ -118,7 +118,7 @@ def resultado_cep(chart):
 def validar_processo():
     """Valida se o processo de geração de relatórios está funcionando corretamente."""
     try:
-        from cartas_controle.main import Main
+        from CEP.cartas_controle.main import Main
         if Main.validar_processo():
             return jsonify({"status": "sucesso", "message": "Processo de geração de relatórios validado com sucesso"}), 200
         else:
