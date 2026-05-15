@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from jose import jwt, JWTError
 
 from Login.async_model import AsyncDBUserManager, get_db_dsn_from_env
+from cep_routes import router as cep_router
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(cep_router)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
