@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Optional
 
 import asyncpg
@@ -12,13 +13,12 @@ def get_db_dsn_from_env() -> Optional[str]:
     return os.environ.get("DATABASE_URL") or os.environ.get("DATABASE_DSN")
 
 
-CREATE_USERS_TABLE = """
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL
-)
-"""
+DEFAULT_SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schema.sql"
+
+
+def load_schema_sql() -> str:
+    path = Path(os.environ.get("SCHEMA_PATH", DEFAULT_SCHEMA_PATH))
+    return path.read_text(encoding="utf-8")
 
 
 class AsyncDBUserManager:
@@ -34,9 +34,10 @@ class AsyncDBUserManager:
         self.dsn = dsn
 
     async def ensure_schema(self) -> None:
+        sql = load_schema_sql()
         conn = await asyncpg.connect(dsn=self.dsn)
         try:
-            await conn.execute(CREATE_USERS_TABLE)
+            await conn.execute(sql)
         finally:
             await conn.close()
 
