@@ -13,18 +13,22 @@ class Cartas:
 
     @staticmethod
     def obter_caminhos():
-        """Define os caminhos baseados na estrutura de pastas."""
-        # Define raiz do projeto de forma confiável
+        """Define os caminhos baseados na estrutura de pastas.
+
+        Se `CEP_RELATORIOS_DIR` estiver definida (caso do pipeline em
+        memória), usa esse diretório para os relatórios.
+        """
         script_dir = os.path.dirname(os.path.abspath(__file__))
         raiz_projeto = os.path.dirname(script_dir)
-        
+
         caminho_dados_tratados = os.path.join(raiz_projeto, 'banco_de_dados_tratados')
-        caminho_relatorios = os.path.join(raiz_projeto, 'relatorios')
-        
+        caminho_relatorios = os.environ.get("CEP_RELATORIOS_DIR") or os.path.join(
+            raiz_projeto, 'relatorios'
+        )
+
         if not os.path.exists(caminho_relatorios):
             os.makedirs(caminho_relatorios)
-            print(f"✓ Pasta criada: {caminho_relatorios}")
-            
+
         return caminho_dados_tratados, caminho_relatorios
 
     @staticmethod

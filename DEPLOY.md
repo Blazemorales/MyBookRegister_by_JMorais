@@ -57,6 +57,7 @@ No projeto `frontend_tpe` (Vercel), garanta as env vars:
 | `DATABASE_URL` | Postgres do Render (auto) | sim |
 | `SECRET_KEY` | gerada pelo Render (auto) | sim |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | render.yaml | não (default 60) |
+| `ALLOWED_ORIGINS` | render.yaml | sim (CORS — lista separada por vírgula) |
 | `PORT` | injetada pelo Render | sim (uvicorn já usa) |
 | `PYTHON_VERSION` | render.yaml (`3.12.0`) | não |
 
@@ -65,15 +66,18 @@ No projeto `frontend_tpe` (Vercel), garanta as env vars:
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
 | GET  | `/` | público | health/info |
+| GET  | `/health` | público | liveness (sem DB) |
+| GET  | `/health/db` | público | readiness (com DB) |
 | POST | `/register` | público | cria usuário (hash pbkdf2) |
 | POST | `/login` | público | devolve JWT |
 | GET  | `/me` | Bearer JWT | retorna username |
-| GET  | `/processar` | público | roda pipeline CEP |
-| GET  | `/relatorio/{xr,p,u,imr}` | público | PDF |
-| GET  | `/results/cep/{xr,p,u,imr}` | público | JSON tratado |
-| GET  | `/validarprocesso` | público | valida pipeline |
+| POST | `/upload` | Bearer JWT | envia JSON, grava em `amostras` |
+| GET  | `/processar` | Bearer JWT | processa amostras do user, salva em `resultados` |
+| GET  | `/relatorio/{xr,p,u,imr}` | Bearer JWT | PDF (gera on-demand se faltar) |
+| GET  | `/results/cep/{xr,p,u,imr}` | Bearer JWT | JSON tratado |
 
-> Hoje as rotas CEP são públicas (mesmo comportamento do Flask anterior). Se quiser exigir login, adicione `Depends(get_current_username)` em cada uma.
+Multi-tenant: `amostras` e `resultados` têm `user_id` e estão indexadas por
+`(user_id, chart)`. Cada usuário só vê o que ele mesmo enviou.
 
 ## Troubleshooting
 

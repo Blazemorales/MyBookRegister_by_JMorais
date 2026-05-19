@@ -1,72 +1,66 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from jose import jwt, JWTError
 
+from auth import (
+    create_access_token,
+    get_current_user,
+    set_db as set_auth_db,
+)
 from Login.async_model import AsyncDBUserManager, get_db_dsn_from_env
-from cep_routes import router as cep_router
+from cep_routes import router as cep_router, set_db_manager
+
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "devsecret")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+# Lista explícita de origens permitidas (CORS). Defina `ALLOWED_ORIGINS`
+# separado por vírgula em prod; em dev cai para localhost.
+_DEFAULT_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",")
+    if o.strip()
+]
 
-dsn = get_db_dsn_from_env() or "postgresql://myuser:mysecret@localhost:5432/mydb"
+dsn = get_db_dsn_from_env()
+if not dsn:
+    raise RuntimeError("DATABASE_URL/DATABASE_DSN env var é obrigatória.")
 mgr = AsyncDBUserManager(dsn)
+set_db_manager(mgr)
+set_auth_db(mgr)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if SECRET_KEY == "devsecret":
-        logger.warning("SECRET_KEY not set — using insecure default. Do NOT use in production.")
+    await mgr.connect()
     await mgr.ensure_schema()
-    yield
+    try:
+        yield
+    finally:
+        await mgr.close()
 
 
 app = FastAPI(title="TPE Backend API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(cep_router)
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
 class AuthIn(BaseModel):
     username: str
     password: str
-
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-
-async def get_current_username(token: str = Depends(oauth2_scheme)) -> str:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return username
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 @app.post("/register")
@@ -88,8 +82,23 @@ async def login(payload: AuthIn):
 
 
 @app.get("/me")
-async def me(username: str = Depends(get_current_username)):
-    return {"username": username}
+async def me(user: dict = Depends(get_current_user)):
+    return {"username": user["username"]}
+
+
+@app.get("/health")
+async def health():
+    """Liveness probe — não toca no banco."""
+    return {"ok": True}
+
+
+@app.get("/health/db")
+async def health_db():
+    try:
+        ok = await mgr.ping()
+        return {"ok": bool(ok)}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"db unreachable: {e}")
 
 
 if __name__ == "__main__":

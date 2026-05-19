@@ -16,3 +16,5 @@ services:
         sync: false
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "60"
+      - key: ALLOWED_ORIGINS
+        value: "https://cep-by-j-morais.vercel.app,http://localhost:3000"
