@@ -91,9 +91,54 @@ class AsyncDBUserManager:
             return (await conn.fetchval("SELECT 1")) == 1
 
     async def ensure_schema(self) -> None:
-        sql = load_schema_sql()
+        """Aplica schema.sql, migrando do esquema antigo quando necessário.
+
+        O esquema antigo tinha `amostras(measurements, ...)` e `relatorios`
+        sem `user_id`. Como essas tabelas nunca foram populadas em produção
+        (o pipeline gravava em filesystem), aqui detectamos a presença de
+        `amostras` SEM coluna `user_id` e dropamos antes de aplicar o novo
+        schema. `users` é preservado.
+        """
         await self.connect()
         async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT
+                    EXISTS(
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'amostras'
+                    ) AS amostras_existe,
+                    EXISTS(
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'amostras'
+                          AND column_name = 'user_id'
+                    ) AS amostras_tem_user_id,
+                    EXISTS(
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'resultados'
+                    ) AS resultados_existe,
+                    EXISTS(
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = 'public'
+                          AND table_name = 'resultados'
+                          AND column_name = 'user_id'
+                    ) AS resultados_tem_user_id
+                """
+            )
+
+            esquema_antigo = (
+                row["amostras_existe"] and not row["amostras_tem_user_id"]
+            ) or (
+                row["resultados_existe"] and not row["resultados_tem_user_id"]
+            )
+
+            if esquema_antigo:
+                await conn.execute("DROP TABLE IF EXISTS resultados CASCADE")
+                await conn.execute("DROP TABLE IF EXISTS amostras CASCADE")
+                await conn.execute("DROP TABLE IF EXISTS relatorios CASCADE")
+
+            sql = load_schema_sql()
             await conn.execute(sql)
 
     # ── Users ─────────────────────────────────────────────────────────
