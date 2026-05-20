@@ -137,6 +137,29 @@ class Cartas:
         return a_priori
 
     @staticmethod
+    def aviso_deslocamento_kalman(kalman_vals, linha_central, label_carta):
+        """Detecta deslocamento do processo a partir da tendencia de Kalman.
+
+        Criterio: maior desvio absoluto entre Kalman e a linha central,
+        normalizado pela linha central, maior ou igual a 10%.
+        Retorna string pronta para o relatorio (vazia se sem deslocamento).
+        """
+        if linha_central is None or abs(float(linha_central)) < 1e-12:
+            return ""
+        kvals = np.asarray(kalman_vals, dtype=float)
+        if kvals.size == 0:
+            return ""
+        desvio_max = float(np.max(np.abs(kvals - float(linha_central))))
+        variacao_rel = desvio_max / abs(float(linha_central))
+        if variacao_rel < 0.10:
+            return ""
+        return (
+            f"ATENCAO ({label_carta}): a tendencia de Kalman desviou "
+            f"{variacao_rel * 100:.1f}% da linha central, indicando "
+            f"DESLOCAMENTO do processo. Valide o processo antes de prosseguir."
+        )
+
+    @staticmethod
     def detectar_alertas_montgomery(medias, x_double_bar, sigma):
         """Aplica as 4 regras de Montgomery para pontos fora de controle."""
         n = len(medias)
@@ -298,6 +321,15 @@ class Cartas:
 
         rcp_str = f"{rcp:.6f}" if rcp is not None else "N/A"
 
+        aviso_xbar = Cartas.aviso_deslocamento_kalman(kalman_x, x_double_bar, "Carta X-Bar")
+        aviso_r = Cartas.aviso_deslocamento_kalman(kalman_r, r_bar, "Carta R")
+        avisos_kalman = "\n    ".join(a for a in (aviso_xbar, aviso_r) if a)
+        bloco_kalman = (
+            f"Deslocamento (Kalman >= 10%):\n    {avisos_kalman}\n"
+            if avisos_kalman
+            else "Deslocamento (Kalman >= 10%): Nenhum deslocamento significativo detectado.\n"
+        )
+
         info = f"""Resumo da Analise XR (Causas Especiais):
 
     Media: {x_double_bar:.4f} | Sigma: {sigma:.4f}
@@ -306,6 +338,7 @@ class Cartas:
     Alertas Identificados:
     {txt_alertas if txt_alertas else 'Nenhum ponto fora de controle detectado.'}
 
+    {bloco_kalman}
     RCP (Razão de Controle de Processo): {rcp_str}
     Interpretação: {rcp_msg}
     """
@@ -360,6 +393,13 @@ class Cartas:
         plt.savefig(temp_img, dpi=100, bbox_inches='tight')
         plt.close()
 
+        aviso_p = Cartas.aviso_deslocamento_kalman(kalman_p, P_bar, "Carta P")
+        bloco_kalman = (
+            f"Deslocamento (Kalman >= 10%):\n    {aviso_p}\n"
+            if aviso_p
+            else "Deslocamento (Kalman >= 10%): Nenhum deslocamento significativo detectado.\n"
+        )
+
         info = f"""Resumo da Analise P:
 
     Proporção Media (P-barra): {P_bar:.6f}
@@ -371,6 +411,7 @@ class Cartas:
       LSC = {lsc_P:.6f}
       LIC = {lic_P:.6f}
 
+    {bloco_kalman}
     Desvio Padrao: {dados_p.get('desvio_padrao_p', 0.0):.6f}
     Numero de amostras: {len(proporcoes)}"""
 
@@ -426,6 +467,13 @@ class Cartas:
         plt.savefig(temp_img, dpi=100, bbox_inches='tight')
         plt.close()
 
+        aviso_u = Cartas.aviso_deslocamento_kalman(kalman_u, U_bar, "Carta U")
+        bloco_kalman = (
+            f"Deslocamento (Kalman >= 10%):\n    {aviso_u}\n"
+            if aviso_u
+            else "Deslocamento (Kalman >= 10%): Nenhum deslocamento significativo detectado.\n"
+        )
+
         info = f"""Resumo da Analise U:
 
     Media de Defeitos por Unidade (U-barra): {U_bar:.6f}
@@ -437,6 +485,7 @@ class Cartas:
       LSC = {lsc_u:.6f}
       LIC = {lic_u:.6f}
 
+    {bloco_kalman}
     Desvio Padrao: {dados_u.get('desvio_padrao_u', 0.0):.6f}
     Numero de amostras: {len(u_valores)}"""
 
@@ -504,7 +553,16 @@ class Cartas:
         temp_img = os.path.join(caminho_relatorios, "tmp_imr.png")
         plt.savefig(temp_img, dpi=100, bbox_inches='tight')
         plt.close()
-        
+
+        aviso_i = Cartas.aviso_deslocamento_kalman(kalman_i, media_ind, "Carta I")
+        aviso_mr = Cartas.aviso_deslocamento_kalman(kalman_mr, am_bar, "Carta MR")
+        avisos_kalman = "\n    ".join(a for a in (aviso_i, aviso_mr) if a)
+        bloco_kalman = (
+            f"Deslocamento (Kalman >= 10%):\n    {avisos_kalman}"
+            if avisos_kalman
+            else "Deslocamento (Kalman >= 10%): Nenhum deslocamento significativo detectado."
+        )
+
         info = f"""Resumo da Analise IMR:
 
 Media dos Individuais: {media_ind:.4f}
@@ -519,6 +577,8 @@ Moving Range Media (MR-barra): {am_bar:.4f}
 Limites de Controle MR:
   LSC_MR = {lsc_mr:.4f}
   LIC_MR = {lic_mr:.4f}
+
+{bloco_kalman}
 
 Numero de observacoes: {len(valores_ind)}
 Numero de MR: {len(mr_values)}"""
