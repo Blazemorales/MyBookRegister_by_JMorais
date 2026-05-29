@@ -1,13 +1,24 @@
 "use client";
 
-import { useRelatorioStream, type Medicao } from "@/hooks/useRelatorioStream";
+import {
+  useRelatorioStream,
+  type AlertaCep,
+  type Medicao,
+  type SeveridadeAlerta,
+} from "@/hooks/useRelatorioStream";
 
 export default function AoVivoPage() {
   // Pede 20 pontos de replay ao conectar para a página não começar vazia
   // se o dispositivo já estava emitindo antes do user abrir.
-  const { status, erro, ultimo, buffer, limpar } = useRelatorioStream({
-    replayN: 20,
-  });
+  const {
+    status,
+    erro,
+    ultimo,
+    buffer,
+    alertas,
+    limpar,
+    limparAlertas,
+  } = useRelatorioStream({ replayN: 20 });
 
   return (
     <section className="pt-12 pb-20">
@@ -29,7 +40,7 @@ export default function AoVivoPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
         <Card label="Última leitura">
           <ValorPrincipal medicao={ultimo} />
         </Card>
@@ -41,7 +52,51 @@ export default function AoVivoPage() {
         <Card label="Pontos no buffer">
           <p className="text-2xl font-semibold text-fg">{buffer.length}</p>
         </Card>
+        <Card label="Alertas CEP">
+          <p
+            className={`text-2xl font-semibold ${
+              alertas.some((a) => a.severidade === "critico")
+                ? "text-red-400"
+                : alertas.length > 0
+                  ? "text-yellow-400"
+                  : "text-fg"
+            }`}
+          >
+            {alertas.length}
+          </p>
+        </Card>
       </div>
+
+      {alertas.length > 0 && (
+        <div className="bg-surface border border-line rounded-3xl shadow-sm overflow-hidden mb-8">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-line">
+            <h2 className="text-[15px] font-semibold tracking-tight text-fg">
+              Alertas CEP
+            </h2>
+            <button
+              type="button"
+              onClick={limparAlertas}
+              className="text-[13px] text-fg-muted hover:text-fg transition-colors"
+            >
+              Limpar
+            </button>
+          </div>
+          <ul className="divide-y divide-line">
+            {[...alertas].reverse().slice(0, 10).map((a, i) => (
+              <li
+                key={`${a.received_at}-${a.regra}-${i}`}
+                className="grid grid-cols-[auto_1fr_auto] items-baseline gap-4 px-6 py-3 text-[13px]"
+              >
+                <SeveridadePill severidade={a.severidade} regra={a.regra} />
+                <span className="text-fg">{a.mensagem}</span>
+                <span className="font-mono text-fg-muted">
+                  {formatarHora(a.received_at)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="bg-surface border border-line rounded-3xl shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-line">
@@ -100,6 +155,27 @@ function ValorPrincipal({ medicao }: { medicao: Medicao | null }) {
         </span>
       )}
     </p>
+  );
+}
+
+function SeveridadePill({
+  severidade,
+  regra,
+}: {
+  severidade: SeveridadeAlerta;
+  regra: string;
+}) {
+  const cores: Record<SeveridadeAlerta, string> = {
+    critico: "bg-red-500/15 text-red-300 border-red-500/30",
+    atencao: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30",
+    info: "bg-blue-500/15 text-blue-300 border-blue-500/30",
+  };
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ${cores[severidade]}`}
+    >
+      {regra.replace("_", " ")}
+    </span>
   );
 }
 

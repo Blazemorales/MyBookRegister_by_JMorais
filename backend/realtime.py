@@ -30,6 +30,7 @@ import jwt
 import socketio
 
 from auth import ALGORITHM, SECRET_KEY
+from cep_alertas import analisar_ponto, extrair_escalar
 
 
 logger = logging.getLogger(__name__)
@@ -351,6 +352,21 @@ async def rpi_data(sid: str, data: Any) -> dict:
         asyncio.create_task(
             _persistir_medicao(canal or "default", limpo.get("chart"), limpo),
         )
+
+    # Análise CEP em streaming. Só dispara para payloads escalares; lotes
+    # (`valores`, `dados`) seguem sem análise — quem quiser pode mandar
+    # ponto-a-ponto. A análise é síncrona e barata (sem numpy/scipy).
+    escalar = extrair_escalar(limpo)
+    if escalar is not None:
+        try:
+            for alerta in analisar_ponto(canal or "default", escalar):
+                await sio.emit("alerta_cep", alerta, room=RELATORIO_ROOM)
+                if canal:
+                    await sio.emit(
+                        "alerta_cep", alerta, room=f"{RELATORIO_ROOM}:{canal}"
+                    )
+        except Exception:
+            logger.exception("falha na análise CEP (canal=%s)", canal)
 
     logger.debug("relatorio_data emitido para room %s", RELATORIO_ROOM)
     return {"ok": True, "received_at": limpo["received_at"]}

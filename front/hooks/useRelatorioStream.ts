@@ -17,6 +17,20 @@ export interface Medicao {
   received_at: string;
 }
 
+export type SeveridadeAlerta = "critico" | "atencao" | "info";
+
+export interface AlertaCep {
+  regra: string;
+  severidade: SeveridadeAlerta;
+  mensagem: string;
+  valor: number;
+  media: number;
+  desvio: number;
+  canal: string;
+  kalman: number | null;
+  received_at: string;
+}
+
 export type StreamStatus =
   | "idle"
   | "connecting"
@@ -37,7 +51,9 @@ export interface UseRelatorioStreamResult {
   erro: string | null;
   ultimo: Medicao | null;
   buffer: Medicao[];
+  alertas: AlertaCep[];
   limpar: () => void;
+  limparAlertas: () => void;
 }
 
 const DEFAULT_SOCKET_URL =
@@ -58,9 +74,11 @@ export function useRelatorioStream(
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [erro, setErro] = useState<string | null>(null);
   const [buffer, setBuffer] = useState<Medicao[]>([]);
+  const [alertas, setAlertas] = useState<AlertaCep[]>([]);
   const socketRef = useRef<Socket | null>(null);
 
   const limpar = useCallback(() => setBuffer([]), []);
+  const limparAlertas = useCallback(() => setAlertas([]), []);
 
   useEffect(() => {
     let cancelado = false;
@@ -132,6 +150,15 @@ export function useRelatorioStream(
           return [...proximo, data];
         });
       });
+
+      // Mantemos um buffer maior de alertas (50) porque cada um carrega
+      // contexto valioso pro operador rastrear o que aconteceu.
+      socket.on("alerta_cep", (alerta: AlertaCep) => {
+        setAlertas((prev) => {
+          const proximo = prev.length >= 50 ? prev.slice(1) : prev;
+          return [...proximo, alerta];
+        });
+      });
     }
 
     conectar();
@@ -145,5 +172,5 @@ export function useRelatorioStream(
 
   const ultimo = buffer.length > 0 ? buffer[buffer.length - 1] : null;
 
-  return { status, erro, ultimo, buffer, limpar };
+  return { status, erro, ultimo, buffer, alertas, limpar, limparAlertas };
 }
