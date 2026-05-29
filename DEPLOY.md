@@ -1,65 +1,98 @@
-# Deploy no Render — passo a passo
+# Deploy
 
-O repositório tem um `render.yaml` que provisiona **um Web Service** (FastAPI) e **um Postgres gerenciado** já conectados.
+A stack tem dois deploys independentes:
 
-## 1. Commit e push
+| Camada | Onde | Por quê |
+|---|---|---|
+| Front Next.js | Vercel | Caso de uso nativo; build automático em cada push |
+| Backend FastAPI + Socket.IO | Fly.io | Suporta WebSocket persistente sem hibernação |
+| Postgres | Fly Postgres (via `fly postgres create`) | Same-region, baixa latência, gerenciado |
 
+> O Render saiu da equação porque o free tier hiberna após 15min — derruba conexões Socket.IO em andamento.
+
+---
+
+## Backend → Fly.io
+
+### Pré-requisitos
 ```bash
-git add render.yaml Procfile runtime.txt backend_api.py cep_routes.py Login/ requirements.txt
-git commit -m "Backend FastAPI unificado + auth com Postgres"
-git push origin main
+curl -L https://fly.io/install.sh | sh
+fly auth login
 ```
 
-## 2. Criar Blueprint no Render
-
-1. Acesse https://dashboard.render.com → **New** → **Blueprint**.
-2. Conecte o repositório `Blazemorales/backend_projeto_tpe`.
-3. O Render lê o `render.yaml` automaticamente e mostra dois recursos:
-   - **Web Service**: `backend-projeto-tpe`
-   - **Database**: `tpe-postgres`
-4. Clique **Apply** — ele cria o Postgres primeiro, depois o web service. O Render injeta sozinho:
-   - `DATABASE_URL` (do Postgres)
-   - `SECRET_KEY` (gerado aleatório)
-   - `ACCESS_TOKEN_EXPIRE_MINUTES=60`
-
-## 3. Aguardar o primeiro build
-
-- Build (`pip install -r requirements.txt`) leva 2–4 min.
-- Start (`uvicorn backend_api:app`) chama o `lifespan`, que executa `CREATE TABLE IF NOT EXISTS users (...)` automaticamente.
-- Health check em `/` deve retornar 200.
-
-## 4. Criar o primeiro usuário
-
-Depois que o serviço subir:
+### Primeiro deploy
 
 ```bash
-curl -X POST https://<seu-service>.onrender.com/register \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"<senha-forte>"}'
+cd backend
+# Adota o fly.toml já versionado no repo. Troque o `app = "..."` antes
+# se o nome estiver tomado no Fly.
+fly launch --copy-config --no-deploy
+
+# Cria Postgres gerenciado e injeta DATABASE_URL como secret automaticamente.
+fly postgres create --name tpe-postgres --region gru
+fly postgres attach tpe-postgres
+
+# Segredos restantes (NÃO commite estes valores).
+fly secrets set \
+  SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))') \
+  RPI_DEVICE_TOKEN=$(python3 -c 'import secrets; print(secrets.token_hex(16))') \
+  ALLOWED_ORIGINS=https://<seu-app>.vercel.app
+
+fly deploy
 ```
 
-Ou, com o frontend já apontando pra essa URL, use a aba "Criar conta" na tela de login.
+O `ensure_schema()` do [Login/async_model.py](backend/Login/async_model.py) cria/migra o schema sozinho no primeiro startup.
 
-## 5. Apontar o frontend pra produção
+### Atualizações
+```bash
+cd backend
+fly deploy
+```
 
-No projeto `frontend_tpe` (Vercel), garanta as env vars:
+### Verificar
+```bash
+curl -fsS https://<seu-app>.fly.dev/health
+# {"ok":true}
+curl -fsS https://<seu-app>.fly.dev/health/db
+# {"ok":true}
+fly logs
+```
 
-| Variável | Valor |
-|---|---|
-| `CEP_API_URL` | `https://<seu-service>.onrender.com` |
-| `NEXT_PUBLIC_CEP_API_URL` | `https://<seu-service>.onrender.com` |
-| `AUTH_SECRET` | `openssl rand -hex 32` |
-
-## Variáveis do backend (referência)
+### Variáveis (referência)
 
 | Variável | Origem | Obrigatória |
 |---|---|---|
-| `DATABASE_URL` | Postgres do Render (auto) | sim |
-| `SECRET_KEY` | gerada pelo Render (auto) | sim |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | render.yaml | não (default 60) |
-| `ALLOWED_ORIGINS` | render.yaml | sim (CORS — lista separada por vírgula) |
-| `PORT` | injetada pelo Render | sim (uvicorn já usa) |
-| `PYTHON_VERSION` | render.yaml (`3.12.0`) | não |
+| `DATABASE_URL` | `fly postgres attach` (auto) | sim |
+| `SECRET_KEY` | `fly secrets set` | sim |
+| `RPI_DEVICE_TOKEN` | `fly secrets set` | sim |
+| `ALLOWED_ORIGINS` | `fly secrets set` (CORS — lista por vírgula) | sim |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `[env]` no fly.toml | não (default 60) |
+| `RPI_RATE_LIMIT_HZ` | `[env]` no fly.toml | não (default 20) |
+| `LOG_LEVEL` | `[env]` no fly.toml | não (default INFO) |
+
+---
+
+## Front → Vercel
+
+1. **Dashboard Vercel → Add New → Project → importar `backend_projeto_tpe`**
+2. **Configure Project:**
+   - Framework: `Next.js` (auto)
+   - **Root Directory: `front`** (essencial — é um monorepo)
+3. **Environment Variables** (Production + Preview):
+   ```
+   CEP_API_URL=https://<seu-backend>.fly.dev
+   NEXT_PUBLIC_SOCKET_URL=https://<seu-backend>.fly.dev
+   AUTH_SECRET=<gere com: python3 -c "import secrets; print(secrets.token_hex(32))">
+   ```
+4. **Deploy.** O Vercel detecta o `next.config.ts` e inlinear `NEXT_PUBLIC_SOCKET_URL` no bundle do browser e na CSP.
+5. **Primeiro usuário:**
+   ```bash
+   curl -X POST https://<seu-backend>.fly.dev/register \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"admin","password":"<senha-forte>"}'
+   ```
+
+---
 
 ## Endpoints expostos
 
@@ -72,16 +105,31 @@ No projeto `frontend_tpe` (Vercel), garanta as env vars:
 | POST | `/login` | público | devolve JWT |
 | GET  | `/me` | Bearer JWT | retorna username |
 | POST | `/upload` | Bearer JWT | envia JSON, grava em `amostras` |
-| GET  | `/processar` | Bearer JWT | processa amostras do user, salva em `resultados` |
+| GET  | `/processar` | Bearer JWT | processa amostras, salva em `resultados` |
 | GET  | `/relatorio/{xr,p,u,imr}` | Bearer JWT | PDF (gera on-demand se faltar) |
 | GET  | `/results/cep/{xr,p,u,imr}` | Bearer JWT | JSON tratado |
+| WS   | `/socket.io/` | JWT no handshake | stream `relatorio_data` em tempo real |
 
-Multi-tenant: `amostras` e `resultados` têm `user_id` e estão indexadas por
-`(user_id, chart)`. Cada usuário só vê o que ele mesmo enviou.
+Multi-tenant: `amostras` e `resultados` têm `user_id` indexadas por `(user_id, chart)`.
+
+---
 
 ## Troubleshooting
 
-- **Build falha por `psycopg2`**: requirements já tem `psycopg2-binary` (não exige libpq-dev).
-- **`SECRET_KEY` aviso "insecure default"**: significa que a env var não chegou no runtime — confira no dashboard se foi gerada.
-- **`asyncpg.exceptions.InvalidPasswordError` ou `CannotConnectNowError`**: o Postgres ainda está iniciando; aguarde e o lifespan reconecta no próximo deploy/restart.
-- **Cold start lento (plano free)**: primeira request após 15 min de ociosidade demora ~30s.
+- **Fly free out-of-memory** (matplotlib/scipy/numpy estouram 256MB): o `fly.toml` já vem com `memory = "512mb"`. Custa ~$2/mês acima do free tier.
+- **Socket.IO desconectando frequente:** confira se `auto_stop_machines = "off"` no `fly.toml` — auto-stop derruba conexões ativas.
+- **CSP bloqueia WebSocket no front:** o `connect-src` é parametrizado por `NEXT_PUBLIC_SOCKET_URL`. Se mudar de domínio, refaça o build na Vercel pra inlinar o valor novo.
+- **Rate-limit RPi disparando "rate-limit excedido"**: o default são 20 msg/s por conexão. Ajuste com `fly secrets set RPI_RATE_LIMIT_HZ=50` (ou outra var de ambiente conforme a plataforma).
+- **`__Host-` cookies em localhost via Chrome**: funciona (Chrome trata localhost como secure context). Em Safari/Firefox, pode rejeitar.
+- **`asyncpg.exceptions.CannotConnectNowError`:** Postgres ainda iniciando; espere ~30s no primeiro deploy e o lifespan reconecta.
+
+## Local (Docker Compose)
+
+Pra desenvolvimento, [docker-compose.yml](docker-compose.yml) sobe tudo:
+
+```bash
+cp .env.example .env.local-test
+# preencha SECRET_KEY e AUTH_SECRET com 64 hex chars
+sudo docker compose --env-file .env.local-test --profile sim up --build -d
+# UI: http://localhost:3000  | API: http://localhost:8000
+```

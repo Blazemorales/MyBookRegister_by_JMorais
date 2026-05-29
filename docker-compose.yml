@@ -32,6 +32,7 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      RPI_RATE_LIMIT_HZ: ${RPI_RATE_LIMIT_HZ:-20}
     ports:
       - "8000:8000"
     depends_on:

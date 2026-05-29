@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from numbers import Number
 from typing import Any, Optional
@@ -59,6 +60,32 @@ RELATORIO_ROOM = "receber_relatorio"
 
 # Cartas CEP aceitas (opcional no payload, mas validada quando presente).
 CARTAS_VALIDAS = {"xr", "p", "u", "imr"}
+
+# Rate-limit por conexão RPi. Protege o frontend de um dispositivo defeituoso
+# que comece a emitir centenas de mensagens por segundo. 0 ou negativo desliga.
+RPI_RATE_LIMIT_HZ = float(os.environ.get("RPI_RATE_LIMIT_HZ", "20"))
+_BUCKET_BURST = max(1.0, RPI_RATE_LIMIT_HZ)  # margem de ~1s para rajadas
+
+# sid -> (tokens_disponíveis, last_refill_ts). Estado em memória do processo —
+# se um dia escalar horizontalmente, migrar para Redis (AsyncRedisManager).
+_buckets: dict[str, tuple[float, float]] = {}
+
+
+def _consumir_token(sid: str, *, agora: Optional[float] = None) -> bool:
+    """Token bucket por sid. Repõe à taxa de RPI_RATE_LIMIT_HZ tokens/s,
+    com burst até `_BUCKET_BURST`. Retorna False quando esgotado.
+    """
+    if RPI_RATE_LIMIT_HZ <= 0:
+        return True  # desligado
+    if agora is None:
+        agora = time.monotonic()
+    tokens, last = _buckets.get(sid, (_BUCKET_BURST, agora))
+    tokens = min(_BUCKET_BURST, tokens + (agora - last) * RPI_RATE_LIMIT_HZ)
+    if tokens < 1.0:
+        _buckets[sid] = (tokens, agora)
+        return False
+    _buckets[sid] = (tokens - 1.0, agora)
+    return True
 
 
 # ── Servidor ───────────────────────────────────────────────────────────
@@ -214,6 +241,7 @@ async def connect(sid: str, environ: dict, auth: Optional[dict] = None) -> None:
 
 @sio.event
 async def disconnect(sid: str) -> None:
+    _buckets.pop(sid, None)
     logger.info("desconectado (sid=%s)", sid)
 
 
@@ -245,6 +273,19 @@ async def rpi_data(sid: str, data: Any) -> dict:
     if session.get("role") != "rpi":
         logger.warning("rpi_data de origem não-rpi recusado (sid=%s)", sid)
         return {"ok": False, "error": "não autorizado a publicar dados do RPi"}
+
+    if not _consumir_token(sid):
+        logger.warning(
+            "rate-limit RPi excedido (sid=%s, limite=%.1f Hz)",
+            sid,
+            RPI_RATE_LIMIT_HZ,
+        )
+        await sio.emit(
+            "rpi_erro",
+            {"error": "rate-limit excedido", "limit_hz": RPI_RATE_LIMIT_HZ},
+            to=sid,
+        )
+        return {"ok": False, "error": "rate-limit excedido"}
 
     try:
         limpo = validar_payload_rpi(data)
