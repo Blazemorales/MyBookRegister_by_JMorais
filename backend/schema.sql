@@ -38,3 +38,17 @@ CREATE INDEX IF NOT EXISTS resultados_user_chart_recente_idx
 
 -- Migração: a tabela antiga "relatorios" foi substituída por "resultados".
 DROP TABLE IF EXISTS relatorios CASCADE;
+
+-- Stream bruto das medições recebidas via Socket.IO (rpi_data → relatorio_data).
+-- Append-only, alimenta o replay em subscribe_relatorio para clientes que
+-- conectarem depois do dispositivo já estar emitindo.
+-- Quando o volume crescer (>10M linhas), particionar por dia em received_at.
+CREATE TABLE IF NOT EXISTS medicoes_stream (
+    id          BIGSERIAL PRIMARY KEY,
+    canal       TEXT NOT NULL DEFAULT 'default',
+    chart       TEXT,
+    payload     JSONB NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS medicoes_stream_canal_recente_idx
+    ON medicoes_stream(canal, received_at DESC);

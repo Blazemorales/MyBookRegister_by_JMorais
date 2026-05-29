@@ -18,6 +18,7 @@ processo do FastAPI, então não há porta extra para expor.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -65,6 +66,20 @@ CARTAS_VALIDAS = {"xr", "p", "u", "imr"}
 # que comece a emitir centenas de mensagens por segundo. 0 ou negativo desliga.
 RPI_RATE_LIMIT_HZ = float(os.environ.get("RPI_RATE_LIMIT_HZ", "20"))
 _BUCKET_BURST = max(1.0, RPI_RATE_LIMIT_HZ)  # margem de ~1s para rajadas
+
+# Limite servidor-side do replay (cliente pode pedir N, mas N é cortado por isso).
+# Evita pedido absurdo varrer a tabela inteira.
+STREAM_REPLAY_MAX = int(os.environ.get("STREAM_REPLAY_MAX", "200"))
+
+# DB manager injetado pelo backend_api no startup. Mantém realtime
+# desacoplado do tipo concreto e evita ciclo de import.
+_db = None
+
+
+def set_db(mgr) -> None:
+    """Injeta o AsyncDBUserManager. Chamado uma vez por backend_api."""
+    global _db
+    _db = mgr
 
 # sid -> (tokens_disponíveis, last_refill_ts). Estado em memória do processo —
 # se um dia escalar horizontalmente, migrar para Redis (AsyncRedisManager).
@@ -247,19 +262,45 @@ async def disconnect(sid: str) -> None:
 
 @sio.event
 async def subscribe_relatorio(sid: str, data: Optional[dict] = None) -> dict:
-    """Frontend (re)inscreve-se na aba e, opcionalmente, num canal específico.
+    """Frontend (re)inscreve-se na aba, opcionalmente num canal, e pode
+    pedir um replay do histórico recente via `replay_n`.
 
-    Útil após reconexão e quando se quer receber só de um dispositivo/canal.
+    Útil após reconexão: o frontend não perde o contexto enquanto estava fora.
     """
     session = await sio.get_session(sid)
     if session.get("role") != "frontend":
         return {"ok": False, "error": "apenas frontends podem se inscrever"}
 
+    payload = data or {}
     await sio.enter_room(sid, RELATORIO_ROOM)
-    canal = _canal_da_sessao((data or {}).get("canal"))
+    canal = _canal_da_sessao(payload.get("canal"))
     if canal:
         await sio.enter_room(sid, f"{RELATORIO_ROOM}:{canal}")
-    return {"ok": True, "room": RELATORIO_ROOM, "canal": canal}
+
+    # Replay opcional. Limite servidor-side (STREAM_REPLAY_MAX) é teto duro
+    # para evitar varredura abusiva da tabela.
+    try:
+        pedido = int(payload.get("replay_n") or 0)
+    except (TypeError, ValueError):
+        pedido = 0
+    replay = max(0, min(STREAM_REPLAY_MAX, pedido))
+
+    enviados = 0
+    if replay > 0 and _db is not None:
+        try:
+            pontos = await _db.ultimas_medicoes_stream(canal or "default", replay)
+            for ponto in pontos:
+                await sio.emit("relatorio_data", ponto, to=sid)
+                enviados += 1
+        except Exception:
+            logger.exception("falha ao enviar replay para sid=%s", sid)
+
+    return {
+        "ok": True,
+        "room": RELATORIO_ROOM,
+        "canal": canal,
+        "replay": enviados,
+    }
 
 
 @sio.on("rpi_data")
@@ -303,8 +344,25 @@ async def rpi_data(sid: str, data: Any) -> dict:
     if canal:
         await sio.emit("relatorio_data", limpo, room=f"{RELATORIO_ROOM}:{canal}")
 
+    # Persistir em background — não bloqueia o broadcast nem o ack. Perda
+    # de mensagens em queda do processo é aceitável (medições CEP admitem
+    # gaps), em troca de latência menor no caminho hot.
+    if _db is not None:
+        asyncio.create_task(
+            _persistir_medicao(canal or "default", limpo.get("chart"), limpo),
+        )
+
     logger.debug("relatorio_data emitido para room %s", RELATORIO_ROOM)
     return {"ok": True, "received_at": limpo["received_at"]}
+
+
+async def _persistir_medicao(
+    canal: str, chart: Optional[str], payload: dict
+) -> None:
+    try:
+        await _db.salvar_medicao_stream(canal, chart, payload)
+    except Exception:
+        logger.exception("falha ao persistir medição (canal=%s)", canal)
 
 
 # Alias amigável: alguns clientes podem emitir "report" em vez de "rpi_data".

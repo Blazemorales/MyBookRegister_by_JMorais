@@ -13,7 +13,12 @@ from auth import (
 )
 from Login.async_model import AsyncDBUserManager, get_db_dsn_from_env
 from cep_routes import router as cep_router, set_db_manager
-from realtime import ALLOWED_ORIGINS, make_asgi_app, sio  # noqa: F401
+from realtime import (  # noqa: F401
+    ALLOWED_ORIGINS,
+    make_asgi_app,
+    set_db as set_realtime_db,
+    sio,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,7 @@ if not dsn:
 mgr = AsyncDBUserManager(dsn)
 set_db_manager(mgr)
 set_auth_db(mgr)
+set_realtime_db(mgr)
 
 
 @asynccontextmanager

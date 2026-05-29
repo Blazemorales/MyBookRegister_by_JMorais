@@ -28,6 +28,8 @@ export interface UseRelatorioStreamOptions {
   bufferSize?: number;
   socketUrl?: string;
   canal?: string;
+  /** Pede ao servidor um replay dos últimos N pontos ao conectar. */
+  replayN?: number;
 }
 
 export interface UseRelatorioStreamResult {
@@ -49,6 +51,7 @@ export function useRelatorioStream(
     bufferSize = DEFAULT_BUFFER_SIZE,
     socketUrl,
     canal,
+    replayN,
   } = options;
   const url = socketUrl ?? DEFAULT_SOCKET_URL;
 
@@ -100,7 +103,15 @@ export function useRelatorioStream(
       socket.on("connect", () => {
         setStatus("connected");
         setErro(null);
-        if (canal) socket.emit("subscribe_relatorio", { canal });
+        // Inscreve no canal e/ou pede replay. Servidor responderá com
+        // eventos `relatorio_data` (do replay) antes do ack — o listener
+        // abaixo já está montado, então tudo entra no buffer naturalmente.
+        if (canal || (replayN && replayN > 0)) {
+          socket.emit("subscribe_relatorio", {
+            canal,
+            replay_n: replayN,
+          });
+        }
       });
 
       socket.on("disconnect", (reason: string) => {
@@ -130,7 +141,7 @@ export function useRelatorioStream(
       socketRef.current?.disconnect();
       socketRef.current = null;
     };
-  }, [url, canal, bufferSize]);
+  }, [url, canal, bufferSize, replayN]);
 
   const ultimo = buffer.length > 0 ? buffer[buffer.length - 1] : null;
 

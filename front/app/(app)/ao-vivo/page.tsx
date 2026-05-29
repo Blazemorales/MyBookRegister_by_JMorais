@@ -3,7 +3,11 @@
 import { useRelatorioStream, type Medicao } from "@/hooks/useRelatorioStream";
 
 export default function AoVivoPage() {
-  const { status, erro, ultimo, buffer, limpar } = useRelatorioStream();
+  // Pede 20 pontos de replay ao conectar para a página não começar vazia
+  // se o dispositivo já estava emitindo antes do user abrir.
+  const { status, erro, ultimo, buffer, limpar } = useRelatorioStream({
+    replayN: 20,
+  });
 
   return (
     <section className="pt-12 pb-20">

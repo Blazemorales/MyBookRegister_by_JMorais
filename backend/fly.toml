@@ -26,6 +26,7 @@ primary_region = "gru"  # São Paulo
   ACCESS_TOKEN_EXPIRE_MINUTES = "60"
   LOG_LEVEL = "INFO"
   RPI_RATE_LIMIT_HZ = "20"
+  STREAM_REPLAY_MAX = "200"
 
 # HTTP + WebSocket no mesmo serviço (ASGI single).
 [http_service]

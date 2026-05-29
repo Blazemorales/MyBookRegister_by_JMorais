@@ -246,6 +246,56 @@ class AsyncDBUserManager:
                 pdf,
             )
 
+    # ── Stream de medições (Socket.IO) ────────────────────────────────
+
+    async def salvar_medicao_stream(
+        self,
+        canal: str,
+        chart: Optional[str],
+        payload: dict,
+    ) -> int:
+        """Grava uma medição bruta vinda do RPi. Fire-and-forget no caller."""
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                """
+                INSERT INTO medicoes_stream (canal, chart, payload)
+                VALUES ($1, $2, $3::jsonb)
+                RETURNING id
+                """,
+                canal,
+                chart,
+                payload if isinstance(payload, str) else __import__("json").dumps(payload),
+            )
+
+    async def ultimas_medicoes_stream(
+        self,
+        canal: str,
+        limite: int,
+    ) -> list[dict]:
+        """Últimos `limite` pontos do canal, em ordem cronológica crescente."""
+        if limite <= 0:
+            return []
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT payload FROM medicoes_stream
+                WHERE canal = $1
+                ORDER BY received_at DESC
+                LIMIT $2
+                """,
+                canal,
+                limite,
+            )
+        import json as _json
+
+        payloads: list[dict] = []
+        for r in reversed(rows):
+            p = r["payload"]
+            if isinstance(p, str):
+                p = _json.loads(p)
+            payloads.append(p)
+        return payloads
+
     async def ultimo_resultado(
         self, user_id: int, chart: str
     ) -> Optional[dict[str, Any]]:
