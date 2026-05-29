@@ -1,3 +1,22 @@
 venv/
 .env
+.env.*
+!.env.example
 __pycache__/
+
+# Node / Next.js (frontend será adicionado no PR 2)
+node_modules/
+.next/
+.turbo/
+
+# Editores / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Caches Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+

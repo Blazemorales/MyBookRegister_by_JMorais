@@ -15,3 +15,6 @@ uvicorn==0.47.0
 uvloop==0.22.1
 httptools==0.7.1
 websockets==16.0
+# Necessário só pelo AsyncClient do rpi_simulator.py — o AsyncServer do
+# backend usa o transporte ASGI e não depende de aiohttp.
+aiohttp==3.11.10

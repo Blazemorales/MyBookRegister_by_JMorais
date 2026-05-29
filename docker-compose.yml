@@ -1,0 +1,87 @@
+name: tpe
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tpe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tpe}
+      POSTGRES_DB: ${POSTGRES_DB:-tpe}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # schema.sql sobe na primeira inicialização (initdb).
+      # Em DB já existente, ensure_schema() do backend cuida das migrações.
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+    # Sem `ports:` — o backend acessa via rede Docker (db:5432).
+    # Para psql externo: `docker compose exec db psql -U tpe -d tpe`.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tpe} -d ${POSTGRES_DB:-tpe}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tpe}:${POSTGRES_PASSWORD:-tpe}@db:5432/${POSTGRES_DB:-tpe}
+      SECRET_KEY: ${SECRET_KEY:?defina SECRET_KEY no .env}
+      RPI_DEVICE_TOKEN: ${RPI_DEVICE_TOKEN:?defina RPI_DEVICE_TOKEN no .env}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=3).status==200 else 1)\""
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  front:
+    build:
+      context: ./front
+      args:
+        # URL pública do backend usada pelo browser (Socket.IO + CSP).
+        # O Next inlinea NEXT_PUBLIC_* no build, por isso vai como arg.
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL:-http://localhost:8000}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      # O Next chama o backend server-side a partir da rede Docker, então
+      # endereça pelo nome do serviço (não por localhost).
+      CEP_API_URL: http://backend:8000
+      # Segredo HMAC do cookie de sessão (front/proxy.ts → app/lib/auth.ts).
+      AUTH_SECRET: ${AUTH_SECRET:?defina AUTH_SECRET no .env}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Simulador do Raspberry Pi — só sobe com `docker compose --profile sim up`.
+  # Reusa a imagem do backend (mesmo requirements.txt) e troca o command.
+  rpi-sim:
+    profiles: ["sim"]
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      SOCKET_URL: http://backend:8000
+      RPI_DEVICE_TOKEN: ${RPI_DEVICE_TOKEN:?defina RPI_DEVICE_TOKEN no .env}
+      INTERVALO: ${INTERVALO:-2}
+    command: ["python", "rpi_simulator.py"]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
