@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { backendAuthHeader, backendBaseUrl } from "@/app/lib/backend";
 
 export const dynamic = "force-dynamic";
+// Cobre o cold start do backend (Render free) sem estourar o timeout da função.
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const start = Date.now();

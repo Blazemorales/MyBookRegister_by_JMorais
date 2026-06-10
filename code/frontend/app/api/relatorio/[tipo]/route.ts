@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { backendAuthHeader, backendBaseUrl } from "@/app/lib/backend";
 
 export const dynamic = "force-dynamic";
+// Gerar o PDF leva ~5-7s quente; com cold start do backend (Render free) ou a
+// 1ª renderização do matplotlib pode passar dos 10s padrão da Vercel. 60s é o
+// teto do plano Hobby e dá folga para não estourar o timeout da função.
+export const maxDuration = 60;
 
 const ROTAS: Record<string, string> = {
   xr: "/relatorio/xr",
