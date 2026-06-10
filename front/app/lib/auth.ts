@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const SESSION_COOKIE = "__Host-cep_session";
-// Cookie httpOnly com o JWT que o backend devolve no /login. O proxy.ts
+// Cookie httpOnly com o JWT que o backend devolve no /login. O middleware
 // NÃO valida esse cookie — só checa o SESSION_COOKIE (HMAC). Esse aqui
 // é só transporte: as rotas /api/* leem para encaminhar ao backend.
 export const BACKEND_JWT_COOKIE = "__Host-cep_backend_jwt";
@@ -31,7 +31,9 @@ function sign(payload: string, secret: string): string {
 
 export function createSessionToken(username: string, secret: string): string {
   const issuedAt = Math.floor(Date.now() / 1000);
-  const payload = `${encodeURIComponent(username)}.${issuedAt}`;
+  // Force-encode dots so the "." separator stays unambiguous when splitting.
+  const encodedUser = encodeURIComponent(username).replace(/\./g, "%2E");
+  const payload = `${encodedUser}.${issuedAt}`;
   const signature = sign(payload, secret);
   return `${payload}.${signature}`;
 }
@@ -41,10 +43,16 @@ export function verifySessionToken(
   secret: string,
 ): { username: string; issuedAt: number; expiresAt: number } | null {
   if (!token) return null;
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [encUser, issuedAtStr, signature] = parts;
-
+  // Token format: <encodedUser>.<issuedAt>.<signature>
+  // encodedUser has dots percent-encoded (%2E) so splitting by "." always
+  // yields exactly 3 parts.
+  const dotIndex = token.lastIndexOf(".");
+  if (dotIndex === -1) return null;
+  const sigDotIndex = token.lastIndexOf(".", dotIndex - 1);
+  if (sigDotIndex === -1) return null;
+  const encUser = token.slice(0, sigDotIndex);
+  const issuedAtStr = token.slice(sigDotIndex + 1, dotIndex);
+  const signature = token.slice(dotIndex + 1);
   const issuedAt = Number.parseInt(issuedAtStr, 10);
   if (!Number.isFinite(issuedAt)) return null;
   const now = Math.floor(Date.now() / 1000);
