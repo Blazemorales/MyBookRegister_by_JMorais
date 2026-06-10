@@ -19,6 +19,68 @@ except Exception:  # pragma: no cover - fallback para execucao direta
     _constantes = _mod.constantes
 
 
+import operator
+import re
+
+_OPS_CRITERIO = {
+    "<=": operator.le, ">=": operator.ge,
+    "<": operator.lt, ">": operator.gt,
+    "==": operator.eq, "!=": operator.ne,
+}
+
+
+def parse_criterio_defeito(criterio):
+    """Converte uma string como 'x < 49.00' / 'x >= 51,2' num predicado f(valor)->bool.
+
+    Aceita os operadores < <= > >= == !=. Retorna None se não houver critério
+    reconhecível (aí o dado é tratado como contagem de defeitos já pronta).
+    """
+    if not isinstance(criterio, str):
+        return None
+    m = re.search(r"([<>!=]=|[<>])\s*(-?\d+(?:[.,]\d+)?)", criterio)
+    if not m:
+        return None
+    op = _OPS_CRITERIO.get(m.group(1))
+    if op is None:
+        return None
+    limite = float(m.group(2).replace(",", "."))
+    return lambda x: op(float(x), limite)
+
+
+def normalizar_dataset(ds):
+    """Aceita o formato do professor e devolve um dataset canônico.
+
+    Mapeia, preservando todos os valores brutos:
+      Carta/Chart        -> chart   (e 'MRI' -> 'IMR')
+      Amostras/amostras  -> measurements
+      Defeituosos        -> criterio_defeito
+
+    Idempotente: datasets já canônicos passam intactos.
+    """
+    if not isinstance(ds, dict):
+        return ds
+    out = dict(ds)
+
+    chart = out.get("chart") or out.get("Chart") or out.get("Carta")
+    if chart:
+        chart = str(chart).strip().upper()
+        if chart == "MRI":  # nomenclatura do enunciado == IMR no código
+            chart = "IMR"
+        out["chart"] = chart
+
+    meas = out.get("measurements")
+    if meas is None:
+        meas = out.get("Amostras") or out.get("amostras")
+        if meas is not None:
+            out["measurements"] = meas
+
+    criterio = out.get("criterio_defeito") or out.get("Defeituosos")
+    if criterio is not None:
+        out["criterio_defeito"] = criterio
+
+    return out
+
+
 class DataProcessor:
     """Processa dados brutos de amostras e gera dados tratados."""
     
@@ -164,19 +226,28 @@ class DataProcessor:
 
         # Tamanho da amostra (número de unidades por subamostra)
         N = ds.get("n_amostra") or ds.get("N")
-        if not N:
-            # Não há informação de tamanho de amostra
-            return None
 
-        # Extrair defeitos por amostra (cada entrada pode ser lista ou número)
+        # Critério de defeito (ex.: "x < 49.00"): quando presente, as amostras são
+        # medições brutas e contamos por amostra quantas violam o critério.
+        criterio_str = ds.get("criterio_defeito")
+        pred = parse_criterio_defeito(criterio_str)
+
         defeitos = []
-        for k, v in measurements.items():
-            if isinstance(v, list) and len(v) > 0:
-                defeitos.append(int(v[0]))
-            elif isinstance(v, (int, float)):
-                defeitos.append(int(v))
+        if pred is not None:
+            for k, v in measurements.items():
+                valores = v if isinstance(v, list) else [v]
+                defeitos.append(sum(1 for x in valores if pred(x)))
+                if not N:  # N inferido do tamanho da subamostra
+                    N = len(valores)
+        else:
+            # Caminho clássico: cada entrada já é a contagem de defeituosos.
+            for k, v in measurements.items():
+                if isinstance(v, list) and len(v) > 0:
+                    defeitos.append(int(v[0]))
+                elif isinstance(v, (int, float)):
+                    defeitos.append(int(v))
 
-        if not defeitos:
+        if not N or not defeitos:
             return None
 
         m = len(defeitos)
@@ -200,7 +271,9 @@ class DataProcessor:
             "desvio_padrao_p": float(desvio_padrao_p),
             "lsc_P": float(lsc_P),
             "lic_P": float(lic_P),
-            "proporcoes": [float(p) for p in proporcoes]
+            "proporcoes": [float(p) for p in proporcoes],
+            "criterio_defeito": criterio_str,
+            "defeitos_por_amostra": [int(d) for d in defeitos],
         }
     
     def processar_tipo_u(self, ds):
@@ -211,18 +284,28 @@ class DataProcessor:
 
         # Unidades por amostra (número de unidades inspecionadas por subamostra)
         n_units = ds.get("n_amostra") or ds.get("n")
-        if not n_units:
-            return None
 
-        # Extrair contagens de defeitos por amostra
+        # Critério de defeito (ex.: "x < 49.00"): quando presente, as amostras são
+        # medições brutas e contamos por amostra quantas violam o critério.
+        criterio_str = ds.get("criterio_defeito")
+        pred = parse_criterio_defeito(criterio_str)
+
         defeitos = []
-        for k, v in measurements.items():
-            if isinstance(v, list) and len(v) > 0:
-                defeitos.append(int(v[0]))
-            elif isinstance(v, (int, float)):
-                defeitos.append(int(v))
+        if pred is not None:
+            for k, v in measurements.items():
+                valores = v if isinstance(v, list) else [v]
+                defeitos.append(sum(1 for x in valores if pred(x)))
+                if not n_units:  # n inferido do tamanho da subamostra
+                    n_units = len(valores)
+        else:
+            # Caminho clássico: cada entrada já é a contagem de defeitos.
+            for k, v in measurements.items():
+                if isinstance(v, list) and len(v) > 0:
+                    defeitos.append(int(v[0]))
+                elif isinstance(v, (int, float)):
+                    defeitos.append(int(v))
 
-        if not defeitos:
+        if not n_units or not defeitos:
             return None
 
         m = len(defeitos)
@@ -245,7 +328,9 @@ class DataProcessor:
             "desvio_padrao_u": float(dp_u),
             "lsc_u": float(lsc_u),
             "lic_u": float(lic_u),
-            "u_valores": [float(u) for u in u_valores]
+            "u_valores": [float(u) for u in u_valores],
+            "criterio_defeito": criterio_str,
+            "defeitos_por_amostra": [int(d) for d in defeitos],
         }
     
     def processar_tipo_imr(self, ds):
@@ -314,8 +399,9 @@ class DataProcessor:
             return False
         
         for ds in self.datasets:
+            ds = normalizar_dataset(ds)
             chart_type = ds.get("chart") or ds.get("Chart")
-            
+
             if chart_type == "XR":
                 dados = self.processar_tipo_xr(ds)
             elif chart_type == "P":

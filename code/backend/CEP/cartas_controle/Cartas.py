@@ -221,6 +221,44 @@ class Cartas:
         texto_ascii = texto_norm.encode('ASCII', 'ignore').decode('ASCII')
         return texto_ascii
 
+    @staticmethod
+    def referencias_calculo(chart: str) -> str:
+        """Rastreabilidade: em quais linhas do codigo cada conta e feita.
+
+        Arquivo base: code/backend/CEP/amostras/data_processor.py (numeros de
+        linha). A plotagem fica em Cartas.py.
+        """
+        refs = {
+            "XR": (
+                "Referencias de calculo (data_processor.py):\n"
+                "  x-barra-barra (media das medias): L175 | r-barra (amplitude media): L176\n"
+                "  LSC/LIC X = x-bb +/- A2*r-barra (eq. 16-9): L195-196\n"
+                "  LSC/LIC R = D4*r-barra / D3*r-barra (eq. 16-12): L198-199\n"
+                "  Plotagem/regras: Cartas.py:carta_xr e detectar_alertas_montgomery"
+            ),
+            "IMR": (
+                "Referencias de calculo (data_processor.py):\n"
+                "  am-barra (amplitude movel media): L362\n"
+                "  sigma = am-barra/d2 (eq. 16-19): L369 | LSC/LIC I = media +/- 3*sigma: L371-372\n"
+                "  LSC MR = D4*am-barra (D3=0 p/ n=2): L375\n"
+                "  Plotagem: Cartas.py:carta_imr"
+            ),
+            "P": (
+                "Referencias de calculo (data_processor.py):\n"
+                "  Contagem de defeitos pelo criterio: L239\n"
+                "  P-barra: L255 | sigma_p = sqrt(P-bb*(1-P-bb)/N): L260\n"
+                "  LSC/LIC P = P-barra +/- 3*sigma_p (eq. 16-24): L262-263\n"
+                "  Plotagem: Cartas.py:carta_p"
+            ),
+            "U": (
+                "Referencias de calculo (data_processor.py):\n"
+                "  Contagem de defeitos pelo criterio: L297\n"
+                "  U-barra: L313 | sigma_u = sqrt(U-bb/n): L316\n"
+                "  LSC/LIC U = U-barra +/- 3*sigma_u (eq. 16-27): L317-318\n"
+                "  Plotagem: Cartas.py:carta_u"
+            ),
+        }
+        return refs.get(chart, "")
 
     @staticmethod
     def carta_xr(dados_xr=None):
@@ -347,6 +385,8 @@ class Cartas:
     {bloco_kalman}
     Cpk (Capacidade do Processo): {rcp_str}
     Interpretação: {rcp_msg}
+
+    {Cartas.referencias_calculo("XR")}
     """
         Cartas.gerar_pdf_basico("Relatorio de Controle Estatistico - Montgomery", temp_img, "relatorio_XR.pdf", info)
         if os.path.exists(temp_img) and not os.environ.get("CEP_KEEP_PNG"):
@@ -420,7 +460,9 @@ class Cartas:
 
     {bloco_kalman}
     Desvio Padrao: {dados_p.get('desvio_padrao_p', 0.0):.6f}
-    Numero de amostras: {len(proporcoes)}"""
+    Numero de amostras: {len(proporcoes)}
+
+    {Cartas.referencias_calculo("P")}"""
 
         Cartas.gerar_pdf_basico("Relatorio de Controle - Carta P", temp_img, "relatorio_P.pdf", info)
         if os.path.exists(temp_img) and not os.environ.get("CEP_KEEP_PNG"):
@@ -494,7 +536,9 @@ class Cartas:
 
     {bloco_kalman}
     Desvio Padrao: {dados_u.get('desvio_padrao_u', 0.0):.6f}
-    Numero de amostras: {len(u_valores)}"""
+    Numero de amostras: {len(u_valores)}
+
+    {Cartas.referencias_calculo("U")}"""
 
         Cartas.gerar_pdf_basico("Relatorio de Controle - Carta U", temp_img, "relatorio_U.pdf", info)
         if os.path.exists(temp_img) and not os.environ.get("CEP_KEEP_PNG"):
@@ -588,7 +632,9 @@ Limites de Controle MR:
 {bloco_kalman}
 
 Numero de observacoes: {len(valores_ind)}
-Numero de MR: {len(mr_values)}"""
+Numero de MR: {len(mr_values)}
+
+{Cartas.referencias_calculo("IMR")}"""
         
         Cartas.gerar_pdf_basico("Relatorio de Controle - Carta IMR", temp_img, "relatorio_IMR.pdf", info)
         if os.path.exists(temp_img) and not os.environ.get("CEP_KEEP_PNG"):

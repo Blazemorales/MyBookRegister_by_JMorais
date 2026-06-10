@@ -95,13 +95,16 @@ def gerar_pdf_para(chart: str, dados_tratados: Optional[dict]) -> bytes:
 
 
 def normalizar_payload_upload(raw: bytes | str) -> list[dict]:
-    """Lê o JSON do upload e devolve sempre uma lista de datasets.
-    Aceita objeto único ou lista (mesmo comportamento de
-    DataProcessor.carregar_dados_brutos).
+    """Lê o JSON do upload e devolve sempre uma lista de datasets canônicos.
+
+    Aceita objeto único ou lista, e o formato do enunciado (Carta/Amostras/
+    MRI/Defeituosos) — normalizado para chart/measurements/criterio_defeito,
+    preservando todos os valores brutos.
     """
+    from CEP.amostras.data_processor import normalizar_dataset
+
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8")
     obj = json.loads(raw)
-    if isinstance(obj, list):
-        return obj
-    return [obj]
+    datasets = obj if isinstance(obj, list) else [obj]
+    return [normalizar_dataset(ds) for ds in datasets]
