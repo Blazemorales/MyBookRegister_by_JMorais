@@ -19,6 +19,36 @@ export interface ConteudoPdfManual {
   resArl: ResultadoARL | null;
 }
 
+// jsPDF (Helvetica/WinAnsi) não renderiza grego (μ σ Φ β), o sinal de menos
+// matemático (−), macron combinante (x̄) nem símbolos como ≤ ≥ ≈ √ ∞. Sem
+// conversão eles saem como mojibake (¼, Ã, ¦). Convertemos para ASCII legível,
+// seguindo a mesma convenção de app/lib/pdfValidacao.ts.
+function safe(t: string): string {
+  return t
+    .replace(/μ/g, "mu")
+    .replace(/σ/g, "sigma")
+    .replace(/Φ/g, "Phi")
+    .replace(/β/g, "beta")
+    .replace(/Δ/g, "delta")
+    .replace(/√/g, "sqrt")
+    .replace(/≤/g, "<=")
+    .replace(/≥/g, ">=")
+    .replace(/≈/g, "~=")
+    .replace(/≠/g, "!=")
+    .replace(/∞/g, "inf")
+    .replace(/−/g, "-")
+    .replace(/×/g, "x")
+    .replace(/÷/g, "/")
+    .replace(/²/g, "^2")
+    .replace(/³/g, "^3")
+    .replace(/x̄/g, "x-barra")
+    .replace(/̄/g, "")
+    .replace(/₀/g, "0")
+    .replace(/₁/g, "1")
+    .replace(/₂/g, "2")
+    .replace(/₃/g, "3");
+}
+
 export async function gerarPdfManual(conteudo: ConteudoPdfManual): Promise<void> {
   const { params, resProb, resLimites, resArl } = conteudo;
   const { default: JsPDF } = await import("jspdf");
@@ -38,14 +68,14 @@ export async function gerarPdfManual(conteudo: ConteudoPdfManual): Promise<void>
     newPageIfNeeded(12);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(sz);
-    doc.text(t, 20, y);
+    doc.text(safe(t), 20, y);
     y += sz === 13 ? 8 : 7;
     doc.setFont("helvetica", "normal");
   };
   const linha = (t: string, sz = 10, x = 25) => {
     newPageIfNeeded(6);
     doc.setFontSize(sz);
-    const partes = doc.splitTextToSize(t, W - x - 15);
+    const partes = doc.splitTextToSize(safe(t), W - x - 15);
     doc.text(partes, x, y);
     y += partes.length * (sz * 0.45 + 2);
   };
@@ -149,7 +179,10 @@ export async function gerarPdfManual(conteudo: ConteudoPdfManual): Promise<void>
       `Limites a ±${fmt(resArl.L, 2)}σ_x̄ com subgrupo n = ${resArl.n} e deslocamento k = ${fmt(resArl.k, 2)}σ`,
       10,
     );
-    linha("β = Φ(L − k√n) − Φ(−L − k√n)     ARL = 1 / (1 − β)", 10);
+    linha(
+      "beta = Phi(L - k*sqrt(n)) - Phi(-L - k*sqrt(n))     ARL = 1 / (1 - beta)",
+      10,
+    );
     linha(`ARL₀ (em controle) = ${fmt(resArl.arl0, 2)} amostras`);
     linha(
       `ARL₁ (k=${fmt(resArl.k, 2)}σ) = ${fmt(resArl.arl1, 2)} amostras`,
