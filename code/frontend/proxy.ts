@@ -13,7 +13,7 @@ const PUBLIC_PATHS = new Set<string>([
   "/acesso-negado",
 ]);
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const config = readAuthConfig();
   if (!config) {
     if (request.nextUrl.pathname === "/acesso-negado") {
