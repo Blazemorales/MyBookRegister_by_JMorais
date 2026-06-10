@@ -29,8 +29,8 @@ from typing import Any, Optional
 import jwt
 import socketio
 
-from code.backend.auth import ALGORITHM, SECRET_KEY
-from code.backend.cep_alertas import analisar_ponto, extrair_escalar
+from auth import ALGORITHM, SECRET_KEY
+from cep_alertas import analisar_ponto, extrair_escalar
 
 
 logger = logging.getLogger(__name__)
