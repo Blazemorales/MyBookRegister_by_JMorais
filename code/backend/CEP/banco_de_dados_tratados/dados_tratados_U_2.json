@@ -18,5 +18,18 @@
         8.0,
         6.0,
         3.0
+    ],
+    "criterio_defeito": null,
+    "defeitos_por_amostra": [
+        6,
+        5,
+        3,
+        7,
+        5,
+        2,
+        2,
+        8,
+        6,
+        3
     ]
 }

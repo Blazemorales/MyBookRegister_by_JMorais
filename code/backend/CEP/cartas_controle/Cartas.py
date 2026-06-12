@@ -46,6 +46,33 @@ class Cartas:
         return dados if isinstance(dados, list) else [dados]
 
     @staticmethod
+    def interpretar_cpk(cpk):
+        """Mensagem de interpretação do Cpk para os relatórios."""
+        if cpk is None:
+            return "Cpk não calculado: limites de especificação ausentes."
+        tol = 1e-6
+        if cpk >= 1.33 - tol:
+            return "Cpk >= 1.33: Processo capaz, com folga."
+        if cpk > 1.0 + tol:
+            return "Cpk > 1: Processo capaz, mas com pouca folga."
+        if abs(cpk - 1.0) <= tol:
+            return "Cpk = 1: No limite — possibilidade de produtos defeituosos."
+        return "Cpk < 1: Processo incapaz — altas chances de defeitos."
+
+    @staticmethod
+    def bloco_capacidade(cap):
+        """Texto do relatório para o bloco `capacidade` do data_processor."""
+        if not cap:
+            return ("Cpk (Capacidade do Processo): N/A\n"
+                    "    Interpretação: " + Cartas.interpretar_cpk(None))
+        origem = ("derivadas das cartas (LIE=0.99*LIC, LSE=1.2*LSC)"
+                  if cap.get("origem_especificacao") == "derivada_dos_limites_de_controle"
+                  else "informadas no dataset")
+        return (f"Especificações: LIE={cap['lie']:.4f} | LSE={cap['lse']:.4f} ({origem})\n"
+                f"    Cp={cap['cp']:.6f} | Cpk={cap['cpk']:.6f}\n"
+                f"    Interpretação: {Cartas.interpretar_cpk(cap['cpk'])}")
+
+    @staticmethod
     def gerar_pdf_basico(titulo, caminho_img, nome_arquivo_pdf, info_extra=""):
         """Gera PDF genérico com gráfico e informações."""
         _, caminho_relatorios = Cartas.obter_caminhos()
@@ -340,30 +367,24 @@ class Cartas:
             txt_alertas += f"Amostra {ids[i]}: {', '.join(motivos[i])}\n"
 
         # --- Capacidade do processo (fórmula 16-21): Cpk = min[(LSE-μ)/3σ, (μ-LIE)/3σ] ---
-        # Usa o sigma dos INDIVIDUAIS (r_bar/d2) e os limites de especificação se existirem.
-        lse = dados_xr.get("lse")
-        lie = dados_xr.get("lie")
-        rcp = None  # mantém o nome "rcp" usado no relatório, agora = Cpk
-        rcp_msg = "Cpk não calculado: limites de especificação ausentes."
-        try:
+        # Bloco `capacidade` vem do data_processor (especificação informada ou
+        # derivada autonomamente das cartas). Para dados tratados antigos, sem
+        # esse bloco, recalcula a partir de lse/lie quando existirem.
+        cap = dados_xr.get("capacidade")
+        if not cap:
+            lse = dados_xr.get("lse")
+            lie = dados_xr.get("lie")
             spec_ok = lse is not None and lie is not None and (lse != 0 or lie != 0)
             if spec_ok and sigma_ind and sigma_ind > 0:
                 cpu = (lse - x_double_bar) / (3.0 * sigma_ind)
                 cpl = (x_double_bar - lie) / (3.0 * sigma_ind)
-                rcp = min(cpu, cpl)  # Cpk
-                tol = 1e-6
-                if rcp >= 1.33 - tol:
-                    rcp_msg = "Cpk >= 1.33: Processo capaz, com folga."
-                elif rcp > 1.0 + tol:
-                    rcp_msg = "Cpk > 1: Processo capaz, mas com pouca folga."
-                elif abs(rcp - 1.0) <= tol:
-                    rcp_msg = "Cpk = 1: No limite — possibilidade de produtos defeituosos."
-                else:
-                    rcp_msg = "Cpk < 1: Processo incapaz — altas chances de defeitos."
-        except Exception:
-            rcp_msg = "Erro ao calcular Cpk."
-
-        rcp_str = f"{rcp:.6f}" if rcp is not None else "N/A"
+                cap = {
+                    "lie": lie,
+                    "lse": lse,
+                    "cp": (lse - lie) / (6.0 * sigma_ind),
+                    "cpk": min(cpu, cpl),
+                    "origem_especificacao": "especificacao_informada",
+                }
 
         aviso_xbar = Cartas.aviso_deslocamento_kalman(kalman_x, x_double_bar, "Carta X-Bar")
         aviso_r = Cartas.aviso_deslocamento_kalman(kalman_r, r_bar, "Carta R")
@@ -383,8 +404,7 @@ class Cartas:
     {txt_alertas if txt_alertas else 'Nenhum ponto fora de controle detectado.'}
 
     {bloco_kalman}
-    Cpk (Capacidade do Processo): {rcp_str}
-    Interpretação: {rcp_msg}
+    {Cartas.bloco_capacidade(cap)}
 
     {Cartas.referencias_calculo("XR")}
     """
@@ -630,6 +650,8 @@ Limites de Controle MR:
   LIC_MR = {lic_mr:.4f}
 
 {bloco_kalman}
+
+{Cartas.bloco_capacidade(dados_imr.get("capacidade"))}
 
 Numero de observacoes: {len(valores_ind)}
 Numero de MR: {len(mr_values)}

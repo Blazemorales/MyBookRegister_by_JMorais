@@ -18,6 +18,18 @@ except Exception:  # pragma: no cover - fallback para execucao direta
     _spec.loader.exec_module(_mod)
     _constantes = _mod.constantes
 
+# Fórmulas de capacidade (Cp/Cpk, 16-21) — fonte única em ../analise.py.
+try:
+    from code.backend.CEP import analise as _analise
+except Exception:  # pragma: no cover - fallback para execucao direta
+    import importlib.util
+    _an_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "analise.py"
+    )
+    _an_spec = importlib.util.spec_from_file_location("cep_analise", _an_path)
+    _analise = importlib.util.module_from_spec(_an_spec)
+    _an_spec.loader.exec_module(_analise)
+
 
 import operator
 import re
@@ -81,6 +93,48 @@ def normalizar_dataset(ds):
     return out
 
 
+def ler_especificacoes(ds):
+    """Lê LIE/LSE explícitos do dataset, em várias grafias.
+
+    Retorna (lie, lse) como floats, ou (None, None) quando não há
+    especificação utilizável (ausente, não numérica, zerada ou invertida).
+    """
+    lse = ds.get("Limite sup. Esp", ds.get("lse", ds.get("LSE")))
+    lie = ds.get("Limite inf. Esp", ds.get("lie", ds.get("LIE")))
+    try:
+        lse = float(lse) if lse is not None else None
+        lie = float(lie) if lie is not None else None
+    except (TypeError, ValueError):
+        return None, None
+    if lse is None or lie is None or (lse == 0 and lie == 0) or lse <= lie:
+        return None, None
+    return lie, lse
+
+
+def calcular_capacidade(mu, sigma, lic, lsc, lie=None, lse=None):
+    """Capacidade do processo (Cp/Cpk, fórmula 16-21) com especificação autônoma.
+
+    Usa LIE/LSE quando informados; na ausência, deriva-os dos limites de
+    controle (LIE = 0.99*LIC, LSE = 1.2*LSC — mesma convenção da Questão 1,
+    via analise.capacidade_por_limites). Retorna None se sigma <= 0.
+    """
+    if not sigma or sigma <= 0:
+        return None
+    if lie is not None and lse is not None:
+        origem = "especificacao_informada"
+    else:
+        lie = 0.99 * lic
+        lse = 1.2 * lsc
+        origem = "derivada_dos_limites_de_controle"
+    return {
+        "lie": float(lie),
+        "lse": float(lse),
+        "cp": float(_analise.cp(sigma, lse, lie)),
+        "cpk": float(_analise.cpk(mu, sigma, lse, lie)),
+        "origem_especificacao": origem,
+    }
+
+
 class DataProcessor:
     """Processa dados brutos de amostras e gera dados tratados."""
     
@@ -138,9 +192,9 @@ class DataProcessor:
         if not measurements:
             return None
         
-        lse = ds.get("Limite sup. Esp", 0)
-        lie = ds.get("Limite inf. Esp", 0)
-        
+        lie_esp, lse_esp = ler_especificacoes(ds)
+
+
         todas_as_medias = []
         amplitudes = []
         todos_os_valores = []
@@ -198,10 +252,16 @@ class DataProcessor:
         lsc_r = D4 * r_bar
         lic_r = D3 * r_bar
 
+        # Capacidade: especificação do dataset ou derivada das cartas (autônoma).
+        capacidade = calcular_capacidade(
+            x_double_bar, sigma_individual, lic_x, lsc_x, lie_esp, lse_esp
+        )
+
         return {
             "chart": "XR",
-            "lse": float(lse),
-            "lie": float(lie),
+            "lse": float(capacidade["lse"]) if capacidade else float(lse_esp or 0.0),
+            "lie": float(capacidade["lie"]) if capacidade else float(lie_esp or 0.0),
+            "capacidade": capacidade,
             "x_double_bar": float(x_double_bar),
             "r_bar": float(r_bar),
             "sigma": float(sigma_xbar),
@@ -374,11 +434,18 @@ class DataProcessor:
         # Carta MR: LSC = D4*am_bar, LIC = D3*am_bar (D3=0 para n=2).
         lsc_mr = D4 * am_bar
         lic_mr = max(0.0, D3 * am_bar)
-        
+
+        # Capacidade: especificação do dataset ou derivada das cartas (autônoma).
+        lie_esp, lse_esp = ler_especificacoes(ds)
+        capacidade = calcular_capacidade(
+            media_ind, sigma_ind, lic_ind, lsc_ind, lie_esp, lse_esp
+        )
+
         return {
             "chart": "IMR",
-            "lse": float(ds.get("Limite sup. Esp", 0)),
-            "lie": float(ds.get("Limite inf. Esp", 0)),
+            "lse": float(capacidade["lse"]) if capacidade else float(lse_esp or 0.0),
+            "lie": float(capacidade["lie"]) if capacidade else float(lie_esp or 0.0),
+            "capacidade": capacidade,
             "media_ind": float(media_ind),
             "sigma_ind": float(sigma_ind),
             "sigma_individual": float(sigma_ind),
