@@ -18,12 +18,17 @@ services:
       # Gerado automaticamente pelo Render (assinatura dos JWT do backend).
       - key: SECRET_KEY
         generateValue: true
-      # PostgreSQL (Neon/Supabase free). No Neon, inclua ?sslmode=require.
+      # PostgreSQL (Neon/Supabase free). No Neon/Supabase, inclua ?sslmode=require.
       - key: DATABASE_URL
         sync: false
       # Token que o dispositivo RPi usa para conectar no Socket.IO.
       - key: RPI_DEVICE_TOKEN
         sync: false
       # CORS: inclua a URL do frontend na Vercel, separada por vírgula.
+      # Ex.: https://backend-projeto-tpe.vercel.app
       - key: ALLOWED_ORIGINS
+        sync: false
+      # Opcional — Redis para Socket.IO multi-instância (AsyncRedisManager).
+      # Sem esta var o servidor usa pub/sub em memória (single instance, free tier).
+      - key: REDIS_URL
         sync: false

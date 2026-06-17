@@ -39,6 +39,8 @@ set_realtime_db(mgr)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Retry automático cobre cold-start do Supabase/Neon (pool suspenso pode
+    # demorar até ~10 s para responder na primeira conexão).
     await mgr.connect()
     await mgr.ensure_schema()
     try:
@@ -80,6 +82,17 @@ async def login(payload: AuthIn):
     if not ok:
         raise HTTPException(status_code=401, detail="invalid credentials")
     access_token = create_access_token({"sub": payload.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/token/refresh")
+async def token_refresh(user: dict = Depends(get_current_user)):
+    """Emite um novo JWT para um token ainda válido (sliding expiry).
+
+    O frontend chama este endpoint ao renovar a sessão, garantindo que o JWT
+    do backend nunca expire enquanto a sessão Next.js estiver ativa.
+    """
+    access_token = create_access_token({"sub": user["username"]})
     return {"access_token": access_token, "token_type": "bearer"}
 
 

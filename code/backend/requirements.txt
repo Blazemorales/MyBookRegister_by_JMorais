@@ -18,3 +18,6 @@ websockets==16.0
 # Necessário só pelo AsyncClient do rpi_simulator.py — o AsyncServer do
 # backend usa o transporte ASGI e não depende de aiohttp.
 aiohttp==3.11.10
+# Socket.IO AsyncRedisManager para escalabilidade horizontal (REDIS_URL).
+# Sem REDIS_URL configurado o servidor usa pub/sub em memória (single instance).
+redis[asyncio]>=4.6.0

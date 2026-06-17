@@ -1,9 +1,13 @@
+import asyncio
+import logging
 import os
 from pathlib import Path
 from typing import Any, Optional
 
 import asyncpg
 from passlib.context import CryptContext
+
+logger = logging.getLogger(__name__)
 
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
@@ -63,16 +67,33 @@ class AsyncDBUserManager:
         self._command_timeout = command_timeout if command_timeout is not None else 10.0
         self._pool: Optional[asyncpg.Pool] = None
 
-    async def connect(self) -> None:
+    async def connect(self, *, retries: int = 5, delay: float = 2.0) -> None:
+        """Cria o pool asyncpg com backoff exponencial.
+
+        Cobre cold-start do Supabase/Neon onde o pooler pode demorar ~10 s
+        antes de aceitar conexões após um período de inatividade.
+        """
         if self._pool is not None:
             return
-        self._pool = await asyncpg.create_pool(
-            dsn=self.dsn,
-            min_size=self._min_size,
-            max_size=self._max_size,
-            statement_cache_size=self._statement_cache_size,
-            command_timeout=self._command_timeout,
-        )
+        for attempt in range(retries):
+            try:
+                self._pool = await asyncpg.create_pool(
+                    dsn=self.dsn,
+                    min_size=self._min_size,
+                    max_size=self._max_size,
+                    statement_cache_size=self._statement_cache_size,
+                    command_timeout=self._command_timeout,
+                )
+                return
+            except Exception as exc:
+                if attempt >= retries - 1:
+                    raise
+                wait = delay * (2 ** attempt)
+                logger.warning(
+                    "DB connect failed (attempt %d/%d): %s — retry in %.1fs",
+                    attempt + 1, retries, exc, wait,
+                )
+                await asyncio.sleep(wait)
 
     async def close(self) -> None:
         if self._pool is not None:
