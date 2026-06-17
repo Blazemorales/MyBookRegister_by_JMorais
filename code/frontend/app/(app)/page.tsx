@@ -15,7 +15,7 @@ export default function MenuPage() {
         </p>
       </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-3xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 max-w-3xl mx-auto">
         <MenuCard
           href="/dispositivos"
           title="Gerenciar dispositivos"
@@ -58,7 +58,10 @@ function MenuCard({
       </p>
       <span className="mt-4 inline-flex items-center gap-1 text-[13px] text-accent font-medium">
         Abrir
-        <span aria-hidden className="transition-transform group-hover:translate-x-0.5">
+        <span
+          aria-hidden
+          className="transition-transform group-hover:translate-x-0.5"
+        >
           →
         </span>
       </span>
