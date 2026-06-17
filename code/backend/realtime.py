@@ -106,7 +106,13 @@ def _consumir_token(sid: str, *, agora: Optional[float] = None) -> bool:
 
 # ── Servidor ───────────────────────────────────────────────────────────
 
-sio = socketio.AsyncServer(
+# Escalabilidade horizontal via Redis pub/sub. Quando REDIS_URL está definida,
+# múltiplas instâncias do backend compartilham rooms e eventos Socket.IO via
+# AsyncRedisManager. Sem REDIS_URL o servidor usa pub/sub em memória (single
+# instance, dev local e Render free-tier single-instance).
+_REDIS_URL = os.environ.get("REDIS_URL", "")
+_SOCKETIO_DEBUG = os.environ.get("SOCKETIO_DEBUG", "").lower() in {"1", "true"}
+_SIO_KWARGS = dict(
     async_mode="asgi",
     cors_allowed_origins=ALLOWED_ORIGINS or "*",
     # Heartbeats: detectam quedas rápido e mantêm a conexão viva atrás de
@@ -114,9 +120,18 @@ sio = socketio.AsyncServer(
     # cliente (ver socket.io-client `reconnection: true`, default).
     ping_interval=25,
     ping_timeout=20,
-    logger=os.environ.get("SOCKETIO_DEBUG", "").lower() in {"1", "true"},
-    engineio_logger=os.environ.get("SOCKETIO_DEBUG", "").lower() in {"1", "true"},
+    logger=_SOCKETIO_DEBUG,
+    engineio_logger=_SOCKETIO_DEBUG,
 )
+
+if _REDIS_URL:
+    logger.info("Socket.IO usando AsyncRedisManager (%s)", _REDIS_URL)
+    sio = socketio.AsyncServer(
+        client_manager=socketio.AsyncRedisManager(_REDIS_URL),
+        **_SIO_KWARGS,
+    )
+else:
+    sio = socketio.AsyncServer(**_SIO_KWARGS)
 
 
 # ── Validação dos dados do RPi ─────────────────────────────────────────

@@ -12,7 +12,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       # schema.sql sobe na primeira inicialização (initdb).
       # Em DB já existente, ensure_schema() do backend cuida das migrações.
-      - ./backend/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+      - ./code/backend/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
     # Sem `ports:` — o backend acessa via rede Docker (db:5432).
     # Para psql externo: `docker compose exec db psql -U tpe -d tpe`.
     healthcheck:
@@ -23,7 +23,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./code/backend
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tpe}:${POSTGRES_PASSWORD:-tpe}@db:5432/${POSTGRES_DB:-tpe}
@@ -39,6 +39,9 @@ services:
       KALMAN_Q: ${KALMAN_Q:-0.01}
       KALMAN_R: ${KALMAN_R:-0.10}
       DESLOCAMENTO_PCT: ${DESLOCAMENTO_PCT:-10}
+      # Opcional: URL do Redis para Socket.IO multi-instância (AsyncRedisManager).
+      # Sem essa var o servidor usa pub/sub em memória (single instance).
+      REDIS_URL: ${REDIS_URL:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -55,7 +58,7 @@ services:
 
   front:
     build:
-      context: ./front
+      context: ./code/frontend
       args:
         # URL pública do backend usada pelo browser (Socket.IO + CSP).
         # O Next inlinea NEXT_PUBLIC_* no build, por isso vai como arg.
@@ -66,7 +69,7 @@ services:
       # O Next chama o backend server-side a partir da rede Docker, então
       # endereça pelo nome do serviço (não por localhost).
       CEP_API_URL: http://backend:8000
-      # Segredo HMAC do cookie de sessão (front/proxy.ts → app/lib/auth.ts).
+      # Segredo HMAC do cookie de sessão (middleware.ts → app/lib/auth.ts).
       AUTH_SECRET: ${AUTH_SECRET:?defina AUTH_SECRET no .env}
     ports:
       - "3000:3000"
@@ -79,7 +82,7 @@ services:
   rpi-sim:
     profiles: ["sim"]
     build:
-      context: ./backend
+      context: ./code/backend
     restart: unless-stopped
     environment:
       SOCKET_URL: http://backend:8000

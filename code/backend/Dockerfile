@@ -21,8 +21,9 @@ COPY . .
 
 EXPOSE 8000
 
-# 1 worker é o pacto: rooms/sessions do Socket.IO moram em memória do processo.
-# Para escalar horizontalmente, ligar AsyncRedisManager + sticky session no proxy.
+# Single-instance por padrão. Para escalar horizontalmente:
+#   1. Defina REDIS_URL — o AsyncRedisManager é ativado automaticamente.
+#   2. O proxy (Render/Nginx) deve usar sticky sessions por sid para Socket.IO.
 #
 # Shell-form para expandir ${PORT}: plataformas free (Render, Cloud Run, Koyeb)
 # injetam a porta via $PORT. Fallback 8000 para execução local.
