@@ -1,0 +1,17 @@
+[Unit]
+Description=Monitor de disponibilidade da ESP32 via MQTT
+After=network-online.target mosquitto.service
+Wants=network-online.target
+Requires=mosquitto.service
+
+[Service]
+Type=simple
+ExecStart=/home/pi/esp32-mqtt/esp32-watchdog.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment=MQTT_BROKER=localhost
+
+[Install]
+WantedBy=multi-user.target
