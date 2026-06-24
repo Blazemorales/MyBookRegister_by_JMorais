@@ -4,11 +4,11 @@ Implementa, de forma isolada e testável, cada item pedido nas perguntas:
 
 Questão 1 (cartas de variáveis X-R e I-MR):
   - curto prazo: 1 ponto fora de +/-3 sigma  -> `sob_controle_curto_prazo`
-  - longo prazo: ppm obtido < ppm requerido  -> `ppm_processo`, `atende_longo_prazo`
-  - valor de X para 95% de margem de sucesso -> `quantil_para_rendimento`
-  - capacidade (16-21), inclusive com LIE=0.99*LIC e LSE=1.2*LSC -> `cpk`, `capacidade_por_limites`
-  - margem de sucesso com deslocamento de +1 sigma -> `rendimento_com_deslocamento`
-  - probabilidade de acertar k em n tentativas -> `prob_binomial`
+  - longo prazo: ppm obtido < ppm requerido (890) -> `ppm_processo`, `atende_longo_prazo`
+  - valor de X para 96% de margem de sucesso -> `quantil_para_rendimento`
+  - capacidade (16-21), inclusive com LIE=0.98*LIC e LSE=1.1*LSC -> `cpk`, `capacidade_por_limites`
+  - margem de sucesso com deslocamento de +1.5 sigma -> `rendimento_com_deslocamento`
+  - probabilidade de acertar 85 em 100 tentativas -> `prob_binomial`
 
 Questão 2 (cartas de atributos P e U):
   - sob controle no curto prazo            -> `sob_controle_curto_prazo`
@@ -40,7 +40,7 @@ def cpk(mu, sigma, lse, lie):
     return min(cpu, cpl)
 
 
-def capacidade_por_limites(mu, sigma, lic, lsc, fator_lie=0.99, fator_lse=1.2):
+def capacidade_por_limites(mu, sigma, lic, lsc, fator_lie=0.98, fator_lse=1.1):
     """Capacidade usando especificações DERIVADAS dos limites de controle.
 
     Conforme a Questão 1: LIE = fator_lie * LIC e LSE = fator_lse * LSC.
@@ -78,8 +78,8 @@ def ppm_processo(mu, sigma, lse, lie):
     return fracao_fora_spec(mu, sigma, lse, lie) * 1_000_000.0
 
 
-def atende_longo_prazo(mu, sigma, lse, lie, ppm_requerido=990.0):
-    """Avalia o longo prazo: ppm obtido < ppm requerido (default 990)."""
+def atende_longo_prazo(mu, sigma, lse, lie, ppm_requerido=890.0):
+    """Avalia o longo prazo: ppm obtido < ppm requerido (default 890)."""
     obtido = ppm_processo(mu, sigma, lse, lie)
     return {
         "ppm_obtido": obtido,
@@ -88,7 +88,7 @@ def atende_longo_prazo(mu, sigma, lse, lie, ppm_requerido=990.0):
     }
 
 
-def rendimento_com_deslocamento(mu, sigma, lse, lie, deslocamento_sigmas=1.0):
+def rendimento_com_deslocamento(mu, sigma, lse, lie, deslocamento_sigmas=1.5):
     """Margem de sucesso após deslocar a média em `deslocamento_sigmas`*sigma."""
     mu_desloc = mu + deslocamento_sigmas * sigma
     return rendimento(mu_desloc, sigma, lse, lie)
@@ -97,7 +97,7 @@ def rendimento_com_deslocamento(mu, sigma, lse, lie, deslocamento_sigmas=1.0):
 # ---------------------------------------------------------------------------
 # Quantil para um rendimento alvo (item: "valor de X para 95% de sucesso")
 # ---------------------------------------------------------------------------
-def quantil_para_rendimento(mu, sigma, rendimento_alvo=0.95, lado="superior"):
+def quantil_para_rendimento(mu, sigma, rendimento_alvo=0.96, lado="superior"):
     """Valor de X associado a um rendimento alvo, via inversa da Normal.
 
     lado='superior': X tal que P(x <= X) = rendimento_alvo (percentil).
@@ -149,9 +149,9 @@ if __name__ == "__main__":
     print("ppm:", round(ppm_processo(mu, sigma, lse, lie), 2))
     print("rendimento:", round(rendimento(mu, sigma, lse, lie), 6))
     print("Cpk:", round(cpk(mu, sigma, lse, lie), 4))
-    print("X95 (percentil):", round(quantil_para_rendimento(mu, sigma, 0.95), 4))
-    print("rend. +1sigma:", round(rendimento_com_deslocamento(mu, sigma, lse, lie, 1.0), 6))
-    print("binom 45/50 @p=0.95:", prob_binomial(45, 50, 0.95))
+    print("X96 (percentil):", round(quantil_para_rendimento(mu, sigma, 0.96), 4))
+    print("rend. +1.5sigma:", round(rendimento_com_deslocamento(mu, sigma, lse, lie, 1.5), 6))
+    print("binom 85/100 @p=0.96:", prob_binomial(85, 100, 0.96))
     # Sanidade: rendimento simétrico ~ Cpk via ppm
     assert abs(rendimento(mu, sigma, lse, lie) + fracao_fora_spec(mu, sigma, lse, lie) - 1.0) < 1e-12
     print("OK")
