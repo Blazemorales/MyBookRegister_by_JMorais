@@ -115,16 +115,16 @@ def calcular_capacidade(mu, sigma, lic, lsc, lie=None, lse=None):
     """Capacidade do processo (Cp/Cpk, fórmula 16-21) com especificação autônoma.
 
     Usa LIE/LSE quando informados; na ausência, deriva-os dos limites de
-    controle (LIE = 0.99*LIC, LSE = 1.2*LSC — mesma convenção da Questão 1,
-    via analise.capacidade_por_limites). Retorna None se sigma <= 0.
+    controle (LIE = 0.98*LIC, LSE = 1.1*LSC — conforme enunciado atual).
+    Retorna None se sigma <= 0.
     """
     if not sigma or sigma <= 0:
         return None
     if lie is not None and lse is not None:
         origem = "especificacao_informada"
     else:
-        lie = 0.99 * lic
-        lse = 1.2 * lsc
+        lie = 0.98 * lic
+        lse = 1.1 * lsc
         origem = "derivada_dos_limites_de_controle"
     return {
         "lie": float(lie),
