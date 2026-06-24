@@ -152,39 +152,94 @@ class DataProcessor:
         self.nome_arquivo_padrao = 'dados_producao_total.json'
 
     def carregar_dados_brutos(self, nome_arquivo=None):
+        """Carrega datasets brutos de um ou vários arquivos JSON.
+
+        nome_arquivo pode ser:
+          - None ou str  → arquivo único em banco_de_dados_amostras/ (comportamento original)
+          - list[str]    → caminhos absolutos (ex.: ["/...xr.json", "/...mri.json",
+                           "/...atributos.json"]) para os 3 arquivos separados do professor
         """
-        Carrega dados brutos do arquivo JSON. 
-        Se nome_arquivo não for fornecido, usa o padrão definido no __init__.
-        """
-        # Se não enviou nome no argumento, usa o self.nome_arquivo_padrao
-        arquivo_para_abrir = self.nome_arquivo_padrao
-        
-        # Monta o caminho: diretorio_do_script/banco_de_dados_amostras/arquivo.json
+        if isinstance(nome_arquivo, list):
+            return self._carregar_lista_arquivos(nome_arquivo)
+
+        arquivo_para_abrir = nome_arquivo or self.nome_arquivo_padrao
+
         caminho_completo = os.path.join(
-            self.diretorio_script, 
-            'banco_de_dados_amostras', 
-            arquivo_para_abrir
+            self.diretorio_script,
+            'banco_de_dados_amostras',
+            arquivo_para_abrir,
         )
-        
+
         try:
             with open(caminho_completo, 'r', encoding='utf-8') as f:
                 conteudo = json.load(f)
-                # Garante que datasets seja sempre uma lista
-                self.datasets = conteudo if isinstance(conteudo, list) else [conteudo]
-            
-            print(f"✓ Dados brutos carregados com sucesso: {arquivo_para_abrir}")
+            self.datasets = conteudo if isinstance(conteudo, list) else [conteudo]
+            print(f"✓ Dados brutos carregados: {arquivo_para_abrir}")
+            self._logar_tipos()
             return True
-            
         except FileNotFoundError:
-            print(f"✗ Erro: O arquivo '{arquivo_para_abrir}' não foi encontrado.")
-            print(f"   Caminho tentado: {caminho_completo}")
+            print(f"✗ Arquivo não encontrado: {caminho_completo}")
             return False
         except json.JSONDecodeError:
-            print(f"✗ Erro: O arquivo '{arquivo_para_abrir}' não é um JSON válido.")
+            print(f"✗ JSON inválido: {arquivo_para_abrir}")
             return False
         except Exception as e:
-            print(f"✗ Erro inesperado ao carregar {arquivo_para_abrir}: {e}")
+            print(f"✗ Erro ao carregar {arquivo_para_abrir}: {e}")
             return False
+
+    # Tipos de carta esperados quando carregando os 3 arquivos do professor.
+    _TIPOS_OBRIGATORIOS = {"XR", "IMR", "P", "U"}
+
+    # Mapa nome-de-arquivo → tipo de carta (usado quando o JSON não tem campo chart).
+    _CHART_POR_NOME = {
+        "xr.json": "XR",
+        "mri.json": "IMR",
+    }
+
+    def _carregar_lista_arquivos(self, caminhos):
+        """Carrega e concatena múltiplos arquivos JSON (formato 3-arquivos do professor)."""
+        datasets = []
+        for caminho in caminhos:
+            nome = os.path.basename(caminho).lower()
+            chart_inferido = self._CHART_POR_NOME.get(nome)
+            try:
+                with open(caminho, 'r', encoding='utf-8') as f:
+                    conteudo = json.load(f)
+            except FileNotFoundError:
+                print(f"✗ Arquivo não encontrado: {caminho}")
+                return False
+            except json.JSONDecodeError:
+                print(f"✗ JSON inválido: {caminho}")
+                return False
+
+            items = conteudo if isinstance(conteudo, list) else [conteudo]
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                # Injeta o tipo quando o JSON não traz campo chart e o nome é reconhecido.
+                if chart_inferido and not (item.get("chart") or item.get("Chart")):
+                    item["chart"] = chart_inferido
+                datasets.append(item)
+            print(f"✓ Carregado: {os.path.basename(caminho)} ({len(items)} dataset(s))")
+
+        self.datasets = datasets
+        return self._logar_tipos(required=self._TIPOS_OBRIGATORIOS)
+
+    def _logar_tipos(self, required=None):
+        """Loga os tipos encontrados; aborta se algum tipo obrigatório estiver faltando."""
+        from collections import Counter
+        tipos = Counter(
+            normalizar_dataset(ds).get("chart", "?")
+            for ds in self.datasets
+        )
+        print(f"   Tipos carregados: { {k: v for k, v in sorted(tipos.items())} }")
+        if required:
+            faltando = required - set(tipos.keys())
+            if faltando:
+                print(f"✗ Tipos obrigatórios ausentes: {sorted(faltando)}")
+                print("  Verifique se os 3 arquivos foram passados corretamente.")
+                return False
+        return True
     
     def processar_tipo_xr(self, ds):
         """Processa dados para Carta XR (Médias e Amplitudes)."""
