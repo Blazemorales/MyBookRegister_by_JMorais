@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useCepRelatorio } from "@/hooks/useCepRelatorio";
 import type { TipoRelatorio } from "@/hooks/cepApi";
+import RespostasViewer from "@/app/components/cep/RespostasViewer";
 
 const TIPOS: { valor: TipoRelatorio; label: string; descricao: string }[] = [
   { valor: "xr", label: "Carta X̄-R", descricao: "Média e amplitude" },
@@ -264,12 +265,15 @@ export default function RelatorioViewer() {
       )}
 
       {pdfUrl && (
-        <iframe
-          src={pdfUrl}
-          title={`Relatório CEP — carta ${tipo.toUpperCase()}`}
-          className="w-full border border-line rounded-2xl bg-surface"
-          style={{ height: "70vh" }}
-        />
+        <div className="flex flex-col gap-4">
+          <RespostasViewer tipo={tipo} />
+          <iframe
+            src={pdfUrl}
+            title={`Relatório CEP — carta ${tipo.toUpperCase()}`}
+            className="w-full border border-line rounded-2xl bg-surface"
+            style={{ height: "70vh" }}
+          />
+        </div>
       )}
     </div>
   );

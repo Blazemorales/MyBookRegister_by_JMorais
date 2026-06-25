@@ -118,11 +118,17 @@ async def processar(user: dict = Depends(get_current_user)) -> JSONResponse:
         )
 
     salvos = []
-    for chart, dados in tratados.items():
+    for chart, entry in tratados.items():
+        # entry é {dados: ..., respostas: ...} — persistimos o objeto completo
+        dados_completos = {
+            "dados": entry.get("dados", entry),
+            "respostas": entry.get("respostas"),
+            "respostas_q2": entry.get("respostas_q2"),
+        }
         await db.salvar_resultado(
             user_id=user["user_id"],
             chart=chart,
-            dados=dados,
+            dados=dados_completos,
         )
         salvos.append(chart)
 
@@ -161,6 +167,8 @@ async def resultado_cep(
     dados = res["dados"]
     if isinstance(dados, str):
         dados = json.loads(dados)
+    # Compatibilidade retroativa: se o registro antigo não tem a estrutura nova,
+    # devolve como está. Registros novos já têm {dados, respostas, respostas_q2}.
     return JSONResponse(dados)
 
 
@@ -180,9 +188,11 @@ async def relatorio(
 
     pdf: Optional[bytes] = res["pdf"]
     if pdf is None:
-        dados = res["dados"]
-        if isinstance(dados, str):
-            dados = json.loads(dados)
+        raw = res["dados"]
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        # Novos registros têm estrutura {dados: ..., respostas: ...}
+        dados = raw.get("dados", raw) if isinstance(raw, dict) and "dados" in raw else raw
         try:
             pdf = gerar_pdf_para(nome.upper(), dados)
         except Exception as exc:

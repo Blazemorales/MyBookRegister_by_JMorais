@@ -4,8 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import Validar from "../../components/validar/Validar";
 import RelatorioViewer from "../../components/calibrar/RelatorioViewer";
+import RelatoriosPeriodicos from "../../components/cep/RelatoriosPeriodicos";
 
-type Aba = "calibrar" | "validar";
+type Aba = "calibrar" | "validar" | "periodicos";
 
 export default function CepPage() {
   const [abaAtiva, setAbaAtiva] = useState<Aba>("calibrar");
@@ -44,16 +45,28 @@ export default function CepPage() {
         >
           Validar Dados
         </TabButton>
+        <TabButton
+          ativa={abaAtiva === "periodicos"}
+          onClick={() => setAbaAtiva("periodicos")}
+        >
+          Diário / Mensal
+        </TabButton>
       </nav>
 
       <div className="bg-surface border border-line rounded-3xl shadow-sm overflow-hidden">
-        {abaAtiva === "calibrar" ? (
+        {abaAtiva === "calibrar" && (
           <div className="animate-in fade-in duration-300">
             <RelatorioViewer />
           </div>
-        ) : (
+        )}
+        {abaAtiva === "validar" && (
           <div className="animate-in fade-in duration-300">
             <Validar />
+          </div>
+        )}
+        {abaAtiva === "periodicos" && (
+          <div className="animate-in fade-in duration-300">
+            <RelatoriosPeriodicos />
           </div>
         )}
       </div>

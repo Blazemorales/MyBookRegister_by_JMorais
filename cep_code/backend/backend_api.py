@@ -13,6 +13,7 @@ from auth import (
 )
 from Login.async_model import AsyncDBUserManager, get_db_dsn_from_env
 from cep_routes import router as cep_router, set_db_manager
+from periodicos_routes import router as periodicos_router, set_db_manager as set_periodicos_db
 from realtime import (  # noqa: F401
     ALLOWED_ORIGINS,
     make_asgi_app,
@@ -33,6 +34,7 @@ if not dsn:
     raise RuntimeError("DATABASE_URL/DATABASE_DSN env var é obrigatória.")
 mgr = AsyncDBUserManager(dsn)
 set_db_manager(mgr)
+set_periodicos_db(mgr)
 set_auth_db(mgr)
 set_realtime_db(mgr)
 
@@ -60,6 +62,7 @@ app.add_middleware(
 )
 
 app.include_router(cep_router)
+app.include_router(periodicos_router)
 
 
 class AuthIn(BaseModel):

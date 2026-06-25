@@ -25,17 +25,7 @@ import zipfile
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 
-# Parametros do enunciado atual (ver Avaliao_Software_Cep.pdf).
-# Ajustar AQUI caso a prova oficial altere os valores.
-PPM_REQUERIDO = 890.0
-MARGEM_ALVO = 0.96
-DESLOCAMENTO_SIGMA = 1.5
-BINOM_K = 85
-BINOM_N = 100
-FATOR_LIE = 0.98
-FATOR_LSE = 1.1
-
-
+# Parâmetros centralizados em parametros_enunciado.py — não duplicar aqui.
 def _carregar(nome, caminho_rel):
     """Carrega um módulo por caminho de arquivo (evita conflito com stdlib `code`)."""
     caminho = os.path.join(AQUI, caminho_rel)
@@ -43,6 +33,16 @@ def _carregar(nome, caminho_rel):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+_params = _carregar("cep_params", "parametros_enunciado.py")
+PPM_REQUERIDO     = _params.PPM_REQUERIDO
+MARGEM_ALVO       = _params.MARGEM_ALVO
+DESLOCAMENTO_SIGMA = _params.DESLOCAMENTO_SIGMA
+BINOM_K           = _params.BINOM_K
+BINOM_N           = _params.BINOM_N
+FATOR_LIE         = _params.FATOR_LIE
+FATOR_LSE         = _params.FATOR_LSE
 
 
 analise = _carregar("cep_analise", "analise.py")
