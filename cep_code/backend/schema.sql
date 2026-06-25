@@ -52,3 +52,20 @@ CREATE TABLE IF NOT EXISTS medicoes_stream (
 );
 CREATE INDEX IF NOT EXISTS medicoes_stream_canal_recente_idx
     ON medicoes_stream(canal, received_at DESC);
+CREATE INDEX IF NOT EXISTS medicoes_stream_canal_data_idx
+    ON medicoes_stream(canal, received_at);
+
+-- Relatórios periódicos gerados pela Raspberry Pi (diário às 03:00 BRT e mensal).
+CREATE TABLE IF NOT EXISTS relatorios_periodicos (
+    id         BIGSERIAL PRIMARY KEY,
+    tipo       TEXT NOT NULL,                  -- 'diario' | 'mensal'
+    periodo    TEXT NOT NULL,                  -- '2026-06-23' ou '2026-06'
+    canal      TEXT NOT NULL DEFAULT 'default',
+    dados      JSONB NOT NULL,                 -- answer set + indicadores
+    charts     JSONB,                          -- {carta: png_base64 ou url}
+    pdf        BYTEA,
+    gerado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (tipo, periodo, canal)
+);
+CREATE INDEX IF NOT EXISTS relatorios_periodicos_tipo_periodo_idx
+    ON relatorios_periodicos(tipo, periodo DESC);
