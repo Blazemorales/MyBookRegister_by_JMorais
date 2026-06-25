@@ -333,3 +333,165 @@ class AsyncDBUserManager:
                 chart.upper(),
             )
         return dict(row) if row else None
+
+    # ── Medições por período (stream diário/mensal) ────────────────────
+
+    async def medicoes_do_dia(
+        self,
+        data_brt: str,
+        canal: str = "default",
+    ) -> list[dict]:
+        """Pontos de medicoes_stream de um dia em BRT (formato YYYY-MM-DD).
+
+        Converte o intervalo para UTC internamente usando o offset fixo
+        UTC-3. Para produção com DST real usar ZoneInfo no caller.
+        """
+        import json as _json
+
+        sql = """
+            SELECT id, chart, payload, received_at
+            FROM medicoes_stream
+            WHERE canal = $1
+              AND received_at >= ($2::date AT TIME ZONE 'America/Sao_Paulo')
+              AND received_at <  (($2::date + INTERVAL '1 day') AT TIME ZONE 'America/Sao_Paulo')
+            ORDER BY received_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(sql, canal, data_brt)
+        resultado = []
+        for r in rows:
+            p = r["payload"]
+            if isinstance(p, str):
+                p = _json.loads(p)
+            resultado.append({
+                "id": r["id"],
+                "chart": r["chart"],
+                "payload": p,
+                "received_at": r["received_at"].isoformat(),
+            })
+        return resultado
+
+    async def medicoes_do_periodo(
+        self,
+        inicio_brt: str,
+        fim_brt: str,
+        canal: str = "default",
+    ) -> list[dict]:
+        """Pontos de medicoes_stream entre inicio e fim (YYYY-MM-DD, inclusive, em BRT)."""
+        import json as _json
+
+        sql = """
+            SELECT id, chart, payload, received_at
+            FROM medicoes_stream
+            WHERE canal = $1
+              AND received_at >= ($2::date AT TIME ZONE 'America/Sao_Paulo')
+              AND received_at <  (($3::date + INTERVAL '1 day') AT TIME ZONE 'America/Sao_Paulo')
+            ORDER BY received_at
+        """
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(sql, canal, inicio_brt, fim_brt)
+        resultado = []
+        for r in rows:
+            p = r["payload"]
+            if isinstance(p, str):
+                p = _json.loads(p)
+            resultado.append({
+                "id": r["id"],
+                "chart": r["chart"],
+                "payload": p,
+                "received_at": r["received_at"].isoformat(),
+            })
+        return resultado
+
+    # ── Relatórios periódicos ─────────────────────────────────────────
+
+    async def salvar_relatorio_periodico(
+        self,
+        tipo: str,
+        periodo: str,
+        dados: dict,
+        canal: str = "default",
+        charts: Optional[dict] = None,
+        pdf: Optional[bytes] = None,
+    ) -> int:
+        import json as _json
+
+        sql = """
+            INSERT INTO relatorios_periodicos (tipo, periodo, canal, dados, charts, pdf)
+            VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6)
+            ON CONFLICT (tipo, periodo, canal) DO UPDATE
+                SET dados     = EXCLUDED.dados,
+                    charts    = EXCLUDED.charts,
+                    pdf       = EXCLUDED.pdf,
+                    gerado_em = NOW()
+            RETURNING id
+        """
+        async with self.pool.acquire() as conn:
+            return await conn.fetchval(
+                sql,
+                tipo,
+                periodo,
+                canal,
+                _json.dumps(dados),
+                _json.dumps(charts) if charts is not None else None,
+                pdf,
+            )
+
+    async def ultimo_relatorio_periodico(
+        self,
+        tipo: str,
+        canal: str = "default",
+    ) -> Optional[dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, tipo, periodo, canal, dados, charts, pdf, gerado_em
+                FROM relatorios_periodicos
+                WHERE tipo = $1 AND canal = $2
+                ORDER BY gerado_em DESC
+                LIMIT 1
+                """,
+                tipo,
+                canal,
+            )
+        return dict(row) if row else None
+
+    async def relatorio_periodico_por_periodo(
+        self,
+        tipo: str,
+        periodo: str,
+        canal: str = "default",
+    ) -> Optional[dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, tipo, periodo, canal, dados, charts, pdf, gerado_em
+                FROM relatorios_periodicos
+                WHERE tipo = $1 AND periodo = $2 AND canal = $3
+                """,
+                tipo,
+                periodo,
+                canal,
+            )
+        return dict(row) if row else None
+
+    async def listar_relatorios_periodicos(
+        self,
+        tipo: str,
+        canal: str = "default",
+        limite: int = 30,
+    ) -> list[dict[str, Any]]:
+        async with self.pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, tipo, periodo, canal, gerado_em
+                FROM relatorios_periodicos
+                WHERE tipo = $1 AND canal = $2
+                ORDER BY gerado_em DESC
+                LIMIT $3
+                """,
+                tipo,
+                canal,
+                limite,
+            )
+        return [dict(r) for r in rows]

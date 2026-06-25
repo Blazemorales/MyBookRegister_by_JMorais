@@ -65,7 +65,7 @@ class Cartas:
         if not cap:
             return ("Cpk (Capacidade do Processo): N/A\n"
                     "    Interpretação: " + Cartas.interpretar_cpk(None))
-        origem = ("derivadas das cartas (LIE=0.99*LIC, LSE=1.2*LSC)"
+        origem = ("derivadas das cartas (LIE=0.98*LIC, LSE=1.1*LSC)"
                   if cap.get("origem_especificacao") == "derivada_dos_limites_de_controle"
                   else "informadas no dataset")
         return (f"Especificações: LIE={cap['lie']:.4f} | LSE={cap['lse']:.4f} ({origem})\n"

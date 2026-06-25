@@ -2,14 +2,12 @@
 
 Camada de adaptação sobre DataProcessor + Cartas para que o backend
 possa processar amostras vindas do banco e devolver:
-- `dados` (JSON) por carta — para /results/cep/<chart>
-- `pdf`   (bytes) por carta — para /relatorio/<chart>
+- `dados`    (JSON) por carta — para /results/cep/<chart>
+- `respostas`(JSON) answer set completo Q1+Q2 — para /results/cep/<chart>
+- `pdf`      (bytes) por carta — para /relatorio/<chart>
 
-As classes originais (data_processor.DataProcessor e
-cartas_controle.Cartas) ainda escrevem PDFs em disco, então
-isolamos o efeito colateral por chart via tempdir + ENV var
-`CEP_RELATORIOS_DIR`. Cartas.obter_caminhos() respeita essa env quando
-presente.
+As classes originais ainda escrevem PDFs em disco, então isolamos o
+efeito colateral por chart via tempdir + ENV var `CEP_RELATORIOS_DIR`.
 """
 from __future__ import annotations
 
@@ -35,10 +33,14 @@ def _relatorios_dir(tmpdir: str):
 
 
 def processar_para_usuario(amostras: Iterable[dict]) -> dict[str, dict]:
-    """Recebe lista de payloads (formato do upload original) e devolve
-    `{chart: dados_tratados}`.
+    """Recebe lista de payloads (formato do upload) e devolve
+    `{chart: {dados: ..., respostas: ...}}`.
+
+    O campo `respostas` contém o answer set completo do PDF (items a–g
+    para cartas de variáveis; controle + deslocamento para atributos).
     """
     from CEP.amostras.data_processor import DataProcessor
+    from CEP.respostas import calcular_answer_set
 
     processor = DataProcessor()
     processor.datasets = list(amostras)
@@ -48,26 +50,38 @@ def processar_para_usuario(amostras: Iterable[dict]) -> dict[str, dict]:
     if not processor.processar_dados():
         return {}
 
+    answer_set = calcular_answer_set(processor.dados_tratados)
+
     saida: dict[str, dict] = {}
     for dados in processor.dados_tratados:
         chart = (dados.get("chart") or "").upper()
-        if chart:
-            saida[chart] = dados
+        if not chart:
+            continue
+        saida[chart] = {
+            "dados": dados,
+            "respostas": answer_set.get(chart) or answer_set.get("atributos"),
+        }
+
+    # Inclui o bloco de atributos separado para que /results/cep/p e /u
+    # também exponham as respostas Q2.
+    if "atributos" in answer_set:
+        for chart in ("P", "U"):
+            if chart in saida:
+                saida[chart]["respostas_q2"] = answer_set["atributos"]
+
     return saida
 
 
 _CARTA_TO_PDF = {
-    "XR": "relatorio_XR.pdf",
-    "P": "relatorio_P.pdf",
-    "U": "relatorio_U.pdf",
+    "XR":  "relatorio_XR.pdf",
+    "P":   "relatorio_P.pdf",
+    "U":   "relatorio_U.pdf",
     "IMR": "relatorio_IMR.pdf",
 }
 
 
 def gerar_pdf_para(chart: str, dados_tratados: Optional[dict]) -> bytes:
-    """Gera o PDF da carta `chart` e retorna como bytes, sem deixar
-    arquivos para trás.
-    """
+    """Gera o PDF da carta `chart` e retorna como bytes."""
     from CEP.cartas_controle.Cartas import Cartas
 
     chart = chart.upper()
@@ -95,12 +109,7 @@ def gerar_pdf_para(chart: str, dados_tratados: Optional[dict]) -> bytes:
 
 
 def normalizar_payload_upload(raw: bytes | str) -> list[dict]:
-    """Lê o JSON do upload e devolve sempre uma lista de datasets canônicos.
-
-    Aceita objeto único ou lista, e o formato do enunciado (Carta/Amostras/
-    MRI/Defeituosos) — normalizado para chart/measurements/criterio_defeito,
-    preservando todos os valores brutos.
-    """
+    """Lê o JSON do upload e devolve sempre uma lista de datasets canônicos."""
     from CEP.amostras.data_processor import normalizar_dataset
 
     if isinstance(raw, bytes):
