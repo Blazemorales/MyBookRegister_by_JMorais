@@ -24,4 +24,11 @@ node_modules/
 code/backend/CEP/relatorios/tmp_*.png
 code/backend/CEP/entrega_tmp/
 code/backend/CEP/*.zip
+cep_code/backend/CEP/relatorios/tmp_*.png
+cep_code/backend/CEP/entrega_tmp/
+cep_code/backend/CEP/*.zip
+
+# Agente CEP na Raspberry Pi
+raspberry_code/cep_agent/.env
+raspberry_code/cep_agent/relatorios_locais.db
 
