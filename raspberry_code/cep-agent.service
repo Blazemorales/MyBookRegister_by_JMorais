@@ -1,0 +1,18 @@
+[Unit]
+Description=CEP Agent — Raspberry Pi (ponte MQTT, agendador diário/mensal, FastAPI)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/MyBookRegister_by_JMorais/raspberry_code/cep_agent
+EnvironmentFile=/home/pi/MyBookRegister_by_JMorais/raspberry_code/cep_agent/.env
+ExecStart=/home/pi/MyBookRegister_by_JMorais/venv_cep_agent/bin/uvicorn app:app --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
