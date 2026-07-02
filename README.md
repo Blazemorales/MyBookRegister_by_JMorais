@@ -13,6 +13,7 @@ internet com HTTPS — sem abrir portas no roteador e sem IP fixo.
 - [Hardware necessário](#-hardware-necessário)
 - [Configuração do ESP32](#-configuração-do-esp32)
 - [Configuração da Raspberry Pi (Tunnel)](#-configuração-da-raspberry-pi-tunnel)
+- [Estatísticas de uso (opcional)](#-estatísticas-de-uso-opcional)
 - [Estrutura do projeto](#-estrutura-do-projeto)
 - [Troubleshooting](#-troubleshooting)
 
@@ -47,6 +48,11 @@ Lâmpada DC 12V  (fonte 12V própria, via jack P4)
   `cloudflared`, criando um túnel de saída até a Cloudflare. Quem acessa a URL
   pública chega até a página da ESP32 sem que nenhuma porta do roteador seja
   aberta.
+- A Pi também funciona como um **segundo cérebro**: a cada vez que a ESP32
+  liga/desliga a lâmpada, ela manda um evento pra Pi (`RASPBERRY_URL` no
+  `.ino`), que registra a duração de cada sessão e, uma vez por dia, fecha um
+  JSON com as horas em que a lâmpada ficou acesa (veja
+  [Estatísticas de uso](#-estatísticas-de-uso-opcional)).
 - A carga (12V) fica **isolada** da parte lógica pelos contatos do relé.
 
 ---
@@ -195,22 +201,101 @@ fora do Wi-Fi de casa (4G/5G).
 
 ---
 
+## 📊 Estatísticas de uso (opcional)
+
+Além do túnel, a Pi pode virar um **segundo cérebro**: ela recebe um evento
+da ESP32 a cada vez que a lâmpada liga/desliga e, uma vez por dia, fecha um
+JSON com o total de horas em que a lâmpada ficou acesa.
+
+```
+ESP32 ──POST /lampada──► lampada_stats.py (Flask, :5000, na Pi)
+                              │ grava eventos.jsonl / estado.json
+                              ▼
+              gerar_relatorio_lampada.py (systemd timer, 23:59 BRT)
+                              │
+                              ▼
+              dados_lampada/relatorio_<data>.json
+```
+
+### 1. Apontar a ESP32 pra Pi
+
+No `esp32s3_web_lampada.ino`, edite (junto com `WIFI_SSID`/`WIFI_PASSWORD`):
+
+```cpp
+const char* RASPBERRY_URL = "http://<IP_da_Pi>:5000/lampada";
+```
+
+Use o mesmo cuidado do IP da ESP32: reserve o IP da Pi no DHCP do roteador
+pra ele nunca mudar.
+
+### 2. Subir o receptor de eventos na Pi
+
+```bash
+cd /home/pi/MyBookRegister_by_JMorais/raspberry_code
+python3 -m venv /home/pi/MyBookRegister_by_JMorais/venv_lampada
+/home/pi/MyBookRegister_by_JMorais/venv_lampada/bin/pip install -r requirements.txt
+
+sudo cp lampada-stats.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lampada-stats
+sudo systemctl status lampada-stats --no-pager
+```
+
+Teste manual: ligue/desligue a lâmpada pela página da ESP32 e confira
+
+```bash
+curl http://localhost:5000/lampada/hoje
+```
+
+### 3. Agendar o relatório diário
+
+```bash
+sudo cp lampada-relatorio.service lampada-relatorio.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now lampada-relatorio.timer
+systemctl list-timers lampada-relatorio.timer --no-pager
+```
+
+O relatório do dia fica em `raspberry_code/dados_lampada/relatorio_<data>.json`,
+por exemplo:
+
+```json
+{
+  "data": "2026-07-02",
+  "segundos_ligada": 5400.0,
+  "horas_ligada": 1.5,
+  "ciclos_liga_desliga": 3
+}
+```
+
+Pra fechar um dia específico na mão (ex.: recuperar um dia perdido):
+`gerar_relatorio_lampada.py 2026-07-01`.
+
+> 💡 A duração de cada sessão é calculada pelo relógio da própria Pi (não pelo
+> `ligadoHa` da ESP32), então sobrevive a reboots da placa. Se a Pi ficar
+> desligada na hora do timer (23:59), `Persistent=true` faz ele rodar assim
+> que ela voltar.
+
+---
+
 ## 📁 Estrutura do projeto
 
 ```
 .
-├── esp32s3_web_lampada.ino    # Firmware principal: servidor web na ESP32
-├── esp32s3_mqtt_led.ino       # Variante MQTT (broker mosquitto na Pi)
-├── esp32_ble_lampada.ino      # Variante Bluetooth (BLE, controle local)
-├── uno_teste_lampada.ino      # Teste do relé/fiação com Arduino Uno
-├── wokwi_rele/
-│   ├── sketch.ino             # Simulação no Wokwi (ESP32-S3 + relé)
-│   └── diagram.json           # Diagrama da simulação
-├── pi/
-│   ├── control_led.py         # (Só p/ variante MQTT) API Flask na Pi
-│   ├── led-api.service        # (Só p/ variante MQTT) serviço systemd
-│   └── README_raspberry.md    # Guia do lado da Pi
-├── rele_esp32_lampada.png     # Desenho das ligações (relé + ESP32 + lâmpada)
+├── esp32_code/
+│   ├── code_web/esp32s3_web_lampada/esp32s3_web_lampada.ino   # Firmware principal (web + túnel)
+│   └── code_bluetooth/esp32_ble_lampada/esp32_ble_lampada.ino # Variante Bluetooth (BLE, controle local)
+├── raspberry_code/
+│   ├── control_led.py             # (Só p/ variante MQTT) API Flask na Pi
+│   ├── led-api.service            # (Só p/ variante MQTT) serviço systemd
+│   ├── lampada_stats.py           # Receptor de eventos da ESP32 (POST /lampada)
+│   ├── lampada-stats.service      # Serviço systemd do receptor
+│   ├── gerar_relatorio_lampada.py # Fecha o JSON diário de horas ligada
+│   ├── lampada-relatorio.service  # Job (oneshot) do relatório diário
+│   ├── lampada-relatorio.timer    # Agenda o job diário (23:59 BRT)
+│   ├── dados_lampada/             # eventos.jsonl, estado.json, relatorio_<data>.json (gerados em runtime)
+│   └── README_raspberry.md        # Guia do lado da Pi (variante MQTT)
+├── esquematico_svg/           # Desenho das ligações (relé + ESP32 + lâmpada)
 └── README.md                  # Este arquivo
 ```
 
@@ -246,7 +331,16 @@ fora do Wi-Fi de casa (4G/5G).
 | URL pública abre em branco / 502 | A Pi não alcança a ESP32: `curl -I http://<IP_da_ESP32>` na Pi; confira se o IP da ESP32 mudou (→ reserva de DHCP) |
 | URL funciona em casa, mas não no 4G | DNS ainda propagando (aguarde alguns minutos) ou política de Access bloqueando seu login |
 | Página pública pede login que não chega | No Access, confira o método (e-mail OTP: veja spam; Google: use a conta cadastrada na política) |
-| Quero MQTT de fora de casa | O Tunnel não expõe TCP cru (porta 1883). Use MQTT sobre **WebSockets** (listener 9001 no mosquitto) ou a API Flask em `pi/` |
+| Quero MQTT de fora de casa | O Tunnel não expõe TCP cru (porta 1883). Use MQTT sobre **WebSockets** (listener 9001 no mosquitto) ou a API Flask em `raspberry_code/` |
+
+### Estatísticas de uso
+
+| Problema | Solução |
+|----------|---------|
+| `lampada-stats` não sobe | `journalctl -u lampada-stats -n 50`; confira se o venv em `venv_lampada` existe e tem `flask`/`gunicorn` |
+| `/lampada/hoje` sempre retorna 0 | A ESP32 está postando pro IP certo? Confira `RASPBERRY_URL` no `.ino` e teste `curl -X POST http://localhost:5000/lampada -d '{"aceso":true}' -H 'Content-Type: application/json'` direto na Pi |
+| Relatório do dia não foi gerado | `systemctl list-timers lampada-relatorio.timer`; rode na mão com `gerar_relatorio_lampada.py` para ver o erro |
+| Quero reprocessar um dia antigo | `venv_lampada/bin/python gerar_relatorio_lampada.py AAAA-MM-DD` (os eventos brutos ficam em `dados_lampada/eventos.jsonl`) |
 
 ---
 

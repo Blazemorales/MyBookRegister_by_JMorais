@@ -33,6 +33,8 @@ const int NUM_REDES = sizeof(REDES) / sizeof(REDES[0]);
 int redeAtual = 0;
 
 const char* HOSTNAME      = "lampada";  // acesso por http://lampada.local
+// IP da Raspberry Pi rodando lampada_stats.py (reserve o IP dela no DHCP).
+// Veja README.md ("Estatísticas de uso") — recurso opcional.
 const char* RASPBERRY_URL = "http://192.168.0.50:5000/lampada";
 
 const uint8_t PINO_LED       = 12;     // GPIO ligado ao PC817
@@ -63,6 +65,7 @@ void enviarParaRaspberry() {
   HTTPClient http;
   http.begin(RASPBERRY_URL);
   http.addHeader("Content-Type", "application/json");
+  http.setTimeout(2000);  // recurso opcional: não trava o botão se a Pi estiver fora
   int codigo = http.POST(payload);
 
   if (codigo > 0) {
