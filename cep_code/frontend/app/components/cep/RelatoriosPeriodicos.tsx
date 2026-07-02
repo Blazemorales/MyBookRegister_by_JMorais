@@ -39,7 +39,7 @@ function IndicadoresBloco({ dados }: { dados: Record<string, unknown> }) {
               Carta {chart}
             </p>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-xs">
-              {d.longo_prazo && (
+              {(d.longo_prazo as Record<string, unknown> | undefined) && (
                 <>
                   <span>ppm = {((d.longo_prazo as Record<string, number>).ppm_obtido).toFixed(2)}</span>
                   <span className={(d.longo_prazo as Record<string, unknown>).atende ? "text-emerald-600" : "text-red-500"}>
@@ -50,7 +50,7 @@ function IndicadoresBloco({ dados }: { dados: Record<string, unknown> }) {
               {d.margem_atual != null && (
                 <span>margem = {((d.margem_atual as number) * 100).toFixed(4)}%</span>
               )}
-              {d.capacidade && (
+              {(d.capacidade as Record<string, unknown> | undefined) && (
                 <span>
                   Cpk = {((d.capacidade as Record<string, number | null>).cpk ?? 0)?.toFixed(4) ?? "N/A"}
                 </span>
