@@ -113,14 +113,27 @@ journalctl -u esp32-watchdog -f
 | Mosquitto recusa conexão de fora da Pi | Confira `listener 1883 0.0.0.0` em `local.conf` e se o firewall (se houver) libera a porta na rede local |
 | Quero MQTT achável de fora de casa | O Cloudflare Tunnel não expõe TCP cru (porta 1883); use a API HTTP (`led-api`) como ponte, ou MQTT sobre WebSockets (listener 9001 no mosquitto) |
 
+---
 
-# broker
-sudo apt install -y mosquitto mosquitto-clients && sudo systemctl enable --now mosquitto
-# api
-mkdir -p ~/led-api && cd ~/led-api   # copie control_led.py aqui
-python3 -m venv .venv && source .venv/bin/activate
-pip install flask paho-mqtt gunicorn
-# serviço
-sudo cp led-api.service /etc/systemd/system/ && sudo systemctl daemon-reload
+## Resumo rápido (copiar e colar na Pi)
+
+Assume o repo já clonado em `/home/pi/MyBookRegister_by_JMorais` (veja o
+passo a passo completo acima se for a primeira vez).
+
+```bash
+cd /home/pi/MyBookRegister_by_JMorais/raspberry_code
+
+# 1. broker MQTT
+bash setup_mosquitto.sh
+
+# 2. API de controle (venv + serviço)
+python3 -m venv /home/pi/MyBookRegister_by_JMorais/venv_led_api
+/home/pi/MyBookRegister_by_JMorais/venv_led_api/bin/pip install -r requirements.txt
+sudo cp led-api.service /etc/systemd/system/
+sudo systemctl daemon-reload
 sudo systemctl enable --now led-api
+
+# 3. teste
 curl localhost:5000/led/on
+curl localhost:5000/led/state
+```
