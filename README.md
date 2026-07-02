@@ -107,12 +107,15 @@ O firmware web usa só bibliotecas que **já vêm no core** (`WiFi.h`,
 
 ### 4. Configurar e carregar o sketch
 
-1. Abra `esp32s3_web_lampada.ino`.
-2. Edite o topo do arquivo:
+1. Copie `credenciais.h.example` para `credenciais.h` (mesma pasta do `.ino`)
+   e preencha com sua matrícula e senha da UnB:
    ```cpp
-   const char* WIFI_SSID     = "SUA_REDE";
-   const char* WIFI_PASSWORD = "SUA_SENHA";
+   const char* MATRICULA    = "SUA_MATRICULA";
+   const char* EAP_PASSWORD = "SUA_SENHA_UNB";
    ```
+   `credenciais.h` está no `.gitignore` — nunca commite esse arquivo.
+2. Abra `esp32s3_web_lampada.ino` no Arduino IDE (o `.ino` já inclui
+   `credenciais.h` automaticamente).
 3. Conecte a placa por USB e selecione a porta em **Tools → Port**
    (Linux: `/dev/ttyACM0` ou `/dev/ttyUSB0`; Windows: `COMx`).
 4. Clique em **Upload** (→).

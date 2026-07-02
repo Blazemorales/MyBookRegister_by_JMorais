@@ -16,9 +16,11 @@
 //   - eduroam:      usuário = e-mail completo (matricula@aluno.unb.br)
 //   - UNB Wireless: usuário = matrícula sem @aluno.unb.br
 //   - Identidade anônima em branco, sem certificado CA, MSCHAPv2
+//
+//  MATRICULA e EAP_PASSWORD vêm de "credenciais.h" (arquivo local, fora do
+//  git — veja credenciais.h.example). Nunca commite a senha real aqui.
 // ============================================================================
-const char* MATRICULA    = "***REMOVIDO***";
-const char* EAP_PASSWORD = "***REMOVIDO***";  // senha do domínio UnB (mesma do e-mail/SIGAA)
+#include "credenciais.h"
 
 struct RedeUnB {
   const char* ssid;

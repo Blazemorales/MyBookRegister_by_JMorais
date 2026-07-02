@@ -32,3 +32,6 @@ cep_code/backend/CEP/*.zip
 raspberry_code/cep_agent/.env
 raspberry_code/cep_agent/relatorios_locais.db
 
+# Credenciais Wi-Fi/UnB dos sketches ESP32 (nunca commitar)
+esp32_code/**/credenciais.h
+

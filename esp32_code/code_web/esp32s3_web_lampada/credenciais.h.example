@@ -1,0 +1,6 @@
+// Copie este arquivo para "credenciais.h" (mesma pasta) e preencha com os
+// dados reais. "credenciais.h" está no .gitignore e nunca deve ser commitado.
+#pragma once
+
+const char* MATRICULA    = "SUA_MATRICULA";
+const char* EAP_PASSWORD = "SUA_SENHA_UNB";  // senha do domínio UnB (mesma do e-mail/SIGAA)
