@@ -1,6 +1,7 @@
 /*
  * ============================================================================
- * Servidor Web — Controle de Lâmpada DC 12V  |  ESP32-S3-N16R8 (eduroam - UnB)
+ * Servidor Web — Controle de Lâmpada DC 12V  |  ESP32-S3-N16R8
+ * Redes UnB: eduroam / UNB Wireless (WPA2-Enterprise PEAP/MSCHAPv2)
  * ============================================================================
  */
 
@@ -10,20 +11,31 @@
 #include <HTTPClient.h>
 
 // ============================================================================
-//  CONFIGURAÇÃO EDUROAM - WPA2-Enterprise (PEAP/MSCHAPv2)
+//  CONFIGURAÇÃO REDES UnB - WPA2-Enterprise (PEAP/MSCHAPv2)
+//  Conforme o manual da UnB:
+//   - eduroam:      usuário = e-mail completo (matricula@aluno.unb.br)
+//   - UNB Wireless: usuário = matrícula sem @aluno.unb.br
+//   - Identidade anônima em branco, sem certificado CA, MSCHAPv2
 // ============================================================================
-const char* WIFI_SSID   = "eduroam";
+const char* MATRICULA    = "***REMOVIDO***";
+const char* EAP_PASSWORD = "***REMOVIDO***";  // senha do domínio UnB (mesma do e-mail/SIGAA)
 
-// Ajuste com suas credenciais institucionais da UnB
-// (geralmente é o mesmo login do SIGAA/e-mail institucional)
-const char* EAP_IDENTITY = "***REMOVIDO***@aluno.unb.br";  // identidade
-const char* EAP_USERNAME = "***REMOVIDO***@aluno.unb.br";  // usuário (igual à identidade na maioria dos eduroam)
-const char* EAP_PASSWORD = "***REMOVIDO***";
+struct RedeUnB {
+  const char* ssid;
+  String      usuario;
+};
+
+RedeUnB REDES[] = {
+  { "eduroam",      String(MATRICULA) + "@aluno.unb.br" },  // e-mail completo
+  { "UNB Wireless", String(MATRICULA) },                    // só a matrícula
+};
+const int NUM_REDES = sizeof(REDES) / sizeof(REDES[0]);
+int redeAtual = 0;
 
 const char* HOSTNAME      = "lampada";  // acesso por http://lampada.local
 const char* RASPBERRY_URL = "http://192.168.0.50:5000/lampada";
 
-const uint8_t PINO_LED       = 4;     // GPIO ligado ao PC817
+const uint8_t PINO_LED       = 12;     // GPIO ligado ao PC817
 const bool    LED_ATIVO_ALTO = true;  // HIGH liga
 
 // ============================================================================
@@ -204,33 +216,48 @@ void handleState()  { enviarEstadoJson(); }
 void handleNotFound(){ server.send(404, "text/plain", "Nao encontrado"); }
 
 // ============================================================================
-//  WI-FI EDUROAM (WPA2-Enterprise / PEAP)
+//  WI-FI UnB (WPA2-Enterprise / PEAP / MSCHAPv2)
 // ============================================================================
-void conectarWiFi() {
+// Tenta uma rede da lista REDES[]. A identidade externa recebe o mesmo
+// usuário (equivale a deixar "identidade anônima" em branco no manual) e
+// nenhum certificado CA é passado, como o manual orienta.
+bool tentarRede(int indice) {
+  const RedeUnB& rede = REDES[indice];
+
   WiFi.disconnect(true);
   delay(200);
-
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(HOSTNAME);
 
-  Serial.printf("[WiFi] Conectando ao eduroam como: %s\n", EAP_IDENTITY);
+  Serial.printf("[WiFi] Tentando \"%s\" como: %s\n", rede.ssid, rede.usuario.c_str());
 
-  // WPA2-Enterprise (PEAP/MSCHAPv2) - sem certificado
-  WiFi.begin(WIFI_SSID, WPA2_AUTH_PEAP, EAP_IDENTITY, EAP_USERNAME, EAP_PASSWORD);
+  WiFi.begin(rede.ssid, WPA2_AUTH_PEAP,
+             rede.usuario.c_str(),   // identidade externa
+             rede.usuario.c_str(),   // usuário (MSCHAPv2)
+             EAP_PASSWORD);
 
   unsigned long inicio = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - inicio < 20000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - inicio < 30000) {
     delay(500);
     Serial.print(".");
   }
   Serial.println();
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("[WiFi] Conectado com sucesso ao eduroam!");
+    Serial.printf("[WiFi] Conectado a \"%s\"!\n", rede.ssid);
     Serial.printf("[WiFi] IP: %s | http://%s.local\n", WiFi.localIP().toString().c_str(), HOSTNAME);
-  } else {
-    Serial.println("[WiFi] Nao foi possivel conectar ao eduroam.");
+    return true;
   }
+  Serial.printf("[WiFi] Falha em \"%s\".\n", rede.ssid);
+  return false;
+}
+
+void conectarWiFi() {
+  for (int i = 0; i < NUM_REDES; i++) {
+    redeAtual = i;
+    if (tentarRede(i)) return;
+  }
+  Serial.println("[WiFi] Nenhuma rede da UnB disponivel no momento.");
 }
 
 void garantirWiFi() {
@@ -239,8 +266,11 @@ void garantirWiFi() {
   unsigned long agora = millis();
   if (agora - ultimaTentativaWiFi >= INTERVALO_RECONEXAO_WIFI) {
     ultimaTentativaWiFi = agora;
-    Serial.println("[WiFi] Conexao perdida. Tentando reconectar ao eduroam...");
-    WiFi.begin(WIFI_SSID, WPA2_AUTH_PEAP, EAP_IDENTITY, EAP_USERNAME, EAP_PASSWORD);
+    Serial.println("[WiFi] Conexao perdida. Tentando reconectar...");
+    // alterna entre eduroam e UNB Wireless a cada tentativa
+    if (!tentarRede(redeAtual)) {
+      redeAtual = (redeAtual + 1) % NUM_REDES;
+    }
   }
 }
 
