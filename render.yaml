@@ -1,6 +1,6 @@
 # Render Blueprint — backend FastAPI + Socket.IO (tpe).
 # Importe em https://dashboard.render.com/blueprints (New > Blueprint) apontando
-# para este repositório. O Render builda o Dockerfile de code/backend.
+# para este repositório. O Render builda o Dockerfile de cep_code/backend.
 #
 # Variáveis sem `value`/`generateValue` (sync: false) você preenche no painel
 # após o primeiro deploy: DATABASE_URL, RPI_DEVICE_TOKEN, ALLOWED_ORIGINS.
@@ -8,7 +8,7 @@ services:
   - type: web
     name: tpe-backend
     runtime: docker
-    rootDir: code/backend
+    rootDir: cep_code/backend
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: free
