@@ -12,7 +12,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       # schema.sql sobe na primeira inicialização (initdb).
       # Em DB já existente, ensure_schema() do backend cuida das migrações.
-      - ./code/backend/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
+      - ./cep_code/backend/schema.sql:/docker-entrypoint-initdb.d/00-schema.sql:ro
     # Sem `ports:` — o backend acessa via rede Docker (db:5432).
     # Para psql externo: `docker compose exec db psql -U tpe -d tpe`.
     healthcheck:
@@ -23,7 +23,7 @@ services:
 
   backend:
     build:
-      context: ./code/backend
+      context: ./cep_code/backend
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-tpe}:${POSTGRES_PASSWORD:-tpe}@db:5432/${POSTGRES_DB:-tpe}
@@ -58,7 +58,7 @@ services:
 
   front:
     build:
-      context: ./code/frontend
+      context: ./cep_code/frontend
       args:
         # URL pública do backend usada pelo browser (Socket.IO + CSP).
         # O Next inlinea NEXT_PUBLIC_* no build, por isso vai como arg.
@@ -82,7 +82,7 @@ services:
   rpi-sim:
     profiles: ["sim"]
     build:
-      context: ./code/backend
+      context: ./cep_code/backend
     restart: unless-stopped
     environment:
       SOCKET_URL: http://backend:8000
