@@ -1,0 +1,18 @@
+[Unit]
+Description=API de controle da lâmpada (Flask + MQTT) — Raspberry Pi
+After=network-online.target mosquitto.service
+Wants=network-online.target
+Requires=mosquitto.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/MyBookRegister_by_JMorais/raspberry_code
+ExecStart=/home/pi/MyBookRegister_by_JMorais/venv_led_api/bin/gunicorn -w 1 -b 127.0.0.1:5000 control_led:app
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
