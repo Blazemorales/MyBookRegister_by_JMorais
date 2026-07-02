@@ -32,3 +32,7 @@ cep_code/backend/CEP/*.zip
 raspberry_code/cep_agent/.env
 raspberry_code/cep_agent/relatorios_locais.db
 
+# Dados gerados pelo receptor de eventos da lâmpada (runtime na Pi)
+raspberry_code/dados_lampada/*
+!raspberry_code/dados_lampada/.gitkeep
+
