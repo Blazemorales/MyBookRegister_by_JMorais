@@ -36,7 +36,7 @@
 // ============================================================================
 const char* NOME_BLE = "Lampada-BLE";   // nome que aparece no celular
 
-const uint8_t PINO_RELE      = 4;       // GPIO -> S do módulo relé
+const uint8_t PINO_RELE      = 12;       // GPIO -> S do módulo relé
 const bool    RELE_ATIVO_ALTO = true;   // true p/ módulo ativo-alto (KY-019);
                                         // troque p/ false se acionar invertido
 
