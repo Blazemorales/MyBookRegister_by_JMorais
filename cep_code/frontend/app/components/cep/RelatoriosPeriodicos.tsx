@@ -85,8 +85,8 @@ function IndicadoresBloco({ dados }: { dados: Record<string, unknown> }) {
   );
 }
 
-function PainelRelatorio({ tipo }: { tipo: TipoPeriodico }) {
-  const { carregando, erro, relatorio, buscar } = useRelatoriosPeriodicos();
+function PainelRelatorio({ tipo, canal }: { tipo: TipoPeriodico; canal: string }) {
+  const { carregando, erro, relatorio, buscar } = useRelatoriosPeriodicos(canal);
 
   useEffect(() => {
     buscar(tipo);
@@ -145,7 +145,7 @@ function PainelRelatorio({ tipo }: { tipo: TipoPeriodico }) {
               Atualizar
             </button>
             <a
-              href={`${process.env.NEXT_PUBLIC_API_BASE ?? ""}/api/relatorios-periodicos/${tipo}?periodo=${relatorio.periodo}`}
+              href={`${process.env.NEXT_PUBLIC_API_BASE ?? ""}/api/relatorios-periodicos/${tipo}?periodo=${relatorio.periodo}&canal=${canal}`}
               className="px-4 py-2 bg-accent text-white rounded-full text-sm font-medium hover:bg-accent-hover transition-colors"
             >
               Ver JSON
@@ -157,7 +157,7 @@ function PainelRelatorio({ tipo }: { tipo: TipoPeriodico }) {
   );
 }
 
-export default function RelatoriosPeriodicos() {
+export default function RelatoriosPeriodicos({ canal = "default" }: { canal?: string }) {
   const [tipo, setTipo] = useState<TipoPeriodico>("diario");
 
   return (
@@ -178,7 +178,7 @@ export default function RelatoriosPeriodicos() {
         ))}
       </div>
 
-      <PainelRelatorio key={tipo} tipo={tipo} />
+      <PainelRelatorio key={`${canal}-${tipo}`} tipo={tipo} canal={canal} />
     </div>
   );
 }

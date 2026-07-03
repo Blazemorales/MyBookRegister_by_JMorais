@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from config import AGENT_PORT
+from config import AGENT_PORT, SCHEDULER_ENABLED
 from scheduler import criar_scheduler
 
 logger = logging.getLogger(__name__)
@@ -34,9 +34,14 @@ _ingest_task: asyncio.Task | None = None
 async def lifespan(app: FastAPI):
     global _ingest_task
 
-    # Inicia o scheduler de cron (03:00 e dia 1)
-    _scheduler.start()
-    logger.info("[app] APScheduler iniciado")
+    # Inicia o scheduler de cron (03:00 e dia 1) — pulado se outro
+    # agendador (ex.: Render Cron Job) já dispara os jobs, pra não gerar
+    # o mesmo relatório duas vezes.
+    if SCHEDULER_ENABLED:
+        _scheduler.start()
+        logger.info("[app] APScheduler iniciado")
+    else:
+        logger.info("[app] APScheduler desativado (SCHEDULER_ENABLED=false)")
 
     # Inicia a ponte MQTT → Socket.IO em background
     from ingest import run as run_ingest
@@ -46,7 +51,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        _scheduler.shutdown(wait=False)
+        if SCHEDULER_ENABLED:
+            _scheduler.shutdown(wait=False)
         if _ingest_task and not _ingest_task.done():
             _ingest_task.cancel()
 
@@ -56,8 +62,10 @@ app = FastAPI(title="CEP Agent — Raspberry Pi", lifespan=lifespan)
 
 @app.get("/health")
 def health():
+    if not SCHEDULER_ENABLED:
+        return {"ok": True, "scheduler_enabled": False, "scheduled_jobs": []}
     jobs = [{"id": j.id, "next_run": str(j.next_run_time)} for j in _scheduler.get_jobs()]
-    return {"ok": True, "scheduled_jobs": jobs}
+    return {"ok": True, "scheduler_enabled": True, "scheduled_jobs": jobs}
 
 
 @app.post("/run/diario")

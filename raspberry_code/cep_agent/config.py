@@ -33,3 +33,8 @@ P_CRITERIO_DEFEITO = os.environ.get("P_CRITERIO_DEFEITO", "").strip() or None
 
 AGENT_PORT         = int(os.environ.get("AGENT_PORT", "8080"))
 TZ                 = os.environ.get("TZ", "America/Sao_Paulo")
+
+# Desative quando o disparo diário/mensal for feito por outro agendador
+# (ex.: Render Cron Job — ver raspberry_code/render-free.yaml) para não
+# gerar o mesmo relatório duas vezes.
+SCHEDULER_ENABLED  = os.environ.get("SCHEDULER_ENABLED", "true").strip().lower() in ("1", "true", "yes")
