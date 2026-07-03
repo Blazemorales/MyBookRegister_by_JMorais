@@ -1,0 +1,55 @@
+# Render Blueprint — variante 100% free do cep_agent (Cron Jobs).
+#
+# Diferença para o `render.yaml` deste diretório (plano Starter/always-on):
+# aqui NÃO sobe um web service persistente. Os relatórios diário/mensal
+# rodam como Render Cron Jobs (free) — cada execução builda o container,
+# roda o job e desliga. O ingest.py (ponte MQTT→Socket.IO) continua
+# rodando na Raspberry Pi via cep-agent.service, como hoje — ele não
+# aparece aqui porque precisa de conexão permanente com o broker local,
+# o que o free tier do Render não sustenta (web service dorme; cron job
+# não fica de pé entre execuções).
+#
+# Importe em https://dashboard.render.com/blueprints (New > Blueprint),
+# apontando para este repositório, com o caminho do blueprint definido
+# como `raspberry_code/render-free.yaml` em "Advanced".
+#
+# Horários em UTC (Render Cron não aceita timezone): BRT = UTC-3 o ano
+# todo (Brasil não usa horário de verão desde 2019).
+#   03:00 BRT -> 06:00 UTC (diário)
+#   03:05 BRT, dia 1 -> 06:05 UTC, dia 1 (mensal)
+services:
+  - type: cron
+    name: tpe-cep-agent-diario
+    runtime: docker
+    dockerfilePath: raspberry_code/cep_agent/Dockerfile
+    dockerContext: .
+    dockerCommand: python run_job.py diario
+    schedule: "0 6 * * *"
+    plan: free
+    envVars:
+      - key: BACKEND_URL
+        sync: false
+      - key: RPI_DEVICE_TOKEN
+        sync: false
+      - key: CANAL
+        value: default
+      - key: TZ
+        value: America/Sao_Paulo
+
+  - type: cron
+    name: tpe-cep-agent-mensal
+    runtime: docker
+    dockerfilePath: raspberry_code/cep_agent/Dockerfile
+    dockerContext: .
+    dockerCommand: python run_job.py mensal
+    schedule: "5 6 1 * *"
+    plan: free
+    envVars:
+      - key: BACKEND_URL
+        sync: false
+      - key: RPI_DEVICE_TOKEN
+        sync: false
+      - key: CANAL
+        value: default
+      - key: TZ
+        value: America/Sao_Paulo

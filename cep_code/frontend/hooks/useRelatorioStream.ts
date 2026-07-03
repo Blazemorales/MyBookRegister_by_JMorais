@@ -38,6 +38,12 @@ export type StreamStatus =
   | "disconnected"
   | "error";
 
+export interface DeviceStatus {
+  canal: string;
+  aceso: boolean;
+  received_at: string;
+}
+
 export interface UseRelatorioStreamOptions {
   bufferSize?: number;
   socketUrl?: string;
@@ -52,6 +58,8 @@ export interface UseRelatorioStreamResult {
   ultimo: Medicao | null;
   buffer: Medicao[];
   alertas: AlertaCep[];
+  /** Último `device_status` recebido (estado ao vivo do dispositivo, ex.: lâmpada ligada/desligada). */
+  deviceStatus: DeviceStatus | null;
   limpar: () => void;
   limparAlertas: () => void;
 }
@@ -75,6 +83,7 @@ export function useRelatorioStream(
   const [erro, setErro] = useState<string | null>(null);
   const [buffer, setBuffer] = useState<Medicao[]>([]);
   const [alertas, setAlertas] = useState<AlertaCep[]>([]);
+  const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   const limpar = useCallback(() => setBuffer([]), []);
@@ -159,6 +168,10 @@ export function useRelatorioStream(
           return [...proximo, alerta];
         });
       });
+
+      socket.on("device_status", (status: DeviceStatus) => {
+        setDeviceStatus(status);
+      });
     }
 
     conectar();
@@ -172,5 +185,5 @@ export function useRelatorioStream(
 
   const ultimo = buffer.length > 0 ? buffer[buffer.length - 1] : null;
 
-  return { status, erro, ultimo, buffer, alertas, limpar, limparAlertas };
+  return { status, erro, ultimo, buffer, alertas, deviceStatus, limpar, limparAlertas };
 }

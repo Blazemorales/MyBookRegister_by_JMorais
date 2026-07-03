@@ -1,0 +1,56 @@
+# Render Blueprint — CEP Agent (roda na nuvem em vez da Raspberry Pi).
+#
+# Importe em https://dashboard.render.com/blueprints (New > Blueprint),
+# apontando para este repositório. Em "Advanced", defina o caminho do
+# blueprint como `raspberry_code/render.yaml` (o padrão é `render.yaml`
+# na raiz, que já é usado pelo blueprint do tpe-backend em cep_code).
+#
+# Isto sobe só o cep_agent (scheduler diário/mensal + ponte MQTT→Socket.IO
+# + endpoints /run). mosquitto, control_led.py e lampada_stats.py continuam
+# rodando na Raspberry Pi — dependem da LAN local com a ESP32.
+#
+# Variáveis sem `value`/`generateValue` (sync: false) você preenche no
+# painel após o primeiro deploy.
+services:
+  - type: web
+    name: tpe-cep-agent
+    runtime: docker
+    dockerfilePath: raspberry_code/cep_agent/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      # URL pública do backend tpe-backend (o outro serviço Render).
+      # Ex.: https://tpe-backend.onrender.com
+      - key: BACKEND_URL
+        sync: false
+      # Mesmo token configurado como RPI_DEVICE_TOKEN no tpe-backend.
+      - key: RPI_DEVICE_TOKEN
+        sync: false
+      # Host público do broker MQTT (mosquitto da Pi exposto na internet).
+      - key: MQTT_BROKER
+        sync: false
+      - key: MQTT_PORT
+        value: "8883"
+      - key: MQTT_TLS
+        value: "true"
+      - key: MQTT_USERNAME
+        sync: false
+      - key: MQTT_PASSWORD
+        sync: false
+      - key: MQTT_TOPICO_SENSOR
+        value: jmorais/esp32s3/sensor/leitura
+      - key: MQTT_TOPICO_LAMPADA
+        value: jmorais/lampada/sessao
+      - key: CANAL
+        value: default
+      - key: CANAL_LAMPADA
+        value: lampada
+      - key: XR_SUBGRUPO_N
+        value: "5"
+      # Deixe em branco para não enviar carta P automaticamente.
+      - key: P_CRITERIO_DEFEITO
+        value: ""
+      - key: TZ
+        value: America/Sao_Paulo

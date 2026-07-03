@@ -26,9 +26,15 @@ import socketio
 from config import (
     BACKEND_URL,
     CANAL,
+    CANAL_LAMPADA,
     MQTT_BROKER,
+    MQTT_PASSWORD,
     MQTT_PORT,
+    MQTT_TLS,
+    MQTT_TOPICO_LAMPADA,
     MQTT_TOPICO_SENSOR,
+    MQTT_TOPICO_STATUS_LAMPADA,
+    MQTT_USERNAME,
     P_CRITERIO_DEFEITO,
     RPI_DEVICE_TOKEN,
     XR_SUBGRUPO_N,
@@ -126,6 +132,20 @@ async def _emitir(payload: dict):
         logger.warning("[ingest] falha ao emitir rpi_data: %s", exc)
 
 
+async def _emitir_status(canal: str, aceso: bool):
+    """Envia o estado ao vivo (ligado/desligado) — não é medição CEP,
+    então usa o evento `rpi_status` em vez de `rpi_data` (sem persistência
+    no servidor, só repassa pro frontend inscrito no canal)."""
+    if not _conectado.is_set():
+        logger.debug("[ingest] aguardando conexão Socket.IO…")
+        await asyncio.wait_for(_conectado.wait(), timeout=15.0)
+    try:
+        ack = await _sio.call("rpi_status", {"canal": canal, "aceso": aceso}, timeout=5)
+        logger.debug("[ingest] rpi_status ack: %s", ack)
+    except Exception as exc:
+        logger.warning("[ingest] falha ao emitir rpi_status: %s", exc)
+
+
 # ── Processamento de leituras ─────────────────────────────────────────
 
 _loop: Optional[asyncio.AbstractEventLoop] = None
@@ -177,24 +197,66 @@ def _processar_leitura(valor: float):
         asyncio.run_coroutine_threadsafe(_emitir(payload_u), _loop)
 
 
+def _processar_leitura_lampada(duracao_s: float):
+    """Sessão de lâmpada fechada (lampada_stats.py): 1 ponto individual
+    na carta I-MR do canal dedicado — não entra no buffer de subgrupo do
+    sensor genérico, pois cada sessão é um evento independente, não uma
+    leitura de um processo contínuo amostrado em grupos fixos."""
+    payload = {
+        "chart": "imr",
+        "valor": duracao_s,
+        "canal": CANAL_LAMPADA,
+        "unidade": "segundos",
+    }
+    asyncio.run_coroutine_threadsafe(_emitir(payload), _loop)
+
+
 # ── Cliente MQTT ──────────────────────────────────────────────────────
 
 def _on_connect_mqtt(client, userdata, flags, rc, props=None):
     if rc == 0:
         logger.info("[ingest] MQTT conectado a %s:%s", MQTT_BROKER, MQTT_PORT)
         client.subscribe(MQTT_TOPICO_SENSOR, qos=1)
-        logger.info("[ingest] assinando tópico: %s", MQTT_TOPICO_SENSOR)
+        client.subscribe(MQTT_TOPICO_LAMPADA, qos=1)
+        client.subscribe(MQTT_TOPICO_STATUS_LAMPADA, qos=1)
+        logger.info(
+            "[ingest] assinando tópicos: %s, %s, %s",
+            MQTT_TOPICO_SENSOR, MQTT_TOPICO_LAMPADA, MQTT_TOPICO_STATUS_LAMPADA,
+        )
     else:
         logger.error("[ingest] MQTT falhou rc=%s", rc)
 
 
+def _parse_status(payload_bytes: bytes) -> Optional[bool]:
+    """Extrai o campo `aceso` (bool) de um payload de status da lâmpada."""
+    try:
+        obj = json.loads(payload_bytes.decode("utf-8", errors="ignore"))
+        if isinstance(obj, dict) and "aceso" in obj:
+            return bool(obj["aceso"])
+    except Exception:
+        pass
+    return None
+
+
 def _on_message_mqtt(client, userdata, msg):
+    if msg.topic == MQTT_TOPICO_STATUS_LAMPADA:
+        aceso = _parse_status(msg.payload)
+        if aceso is None:
+            logger.debug("[ingest] payload de status inválido ignorado: %s", msg.payload[:80])
+            return
+        logger.debug("[ingest] status lâmpada: aceso=%s", aceso)
+        asyncio.run_coroutine_threadsafe(_emitir_status(CANAL_LAMPADA, aceso), _loop)
+        return
+
     valor = _parse_leitura(msg.payload)
     if valor is None:
         logger.debug("[ingest] payload MQTT não numérico ignorado: %s", msg.payload[:80])
         return
     logger.debug("[ingest] leitura MQTT: %s = %s", msg.topic, valor)
-    _processar_leitura(valor)
+    if msg.topic == MQTT_TOPICO_LAMPADA:
+        _processar_leitura_lampada(valor)
+    else:
+        _processar_leitura(valor)
 
 
 def _criar_cliente_mqtt() -> mqtt.Client:
@@ -202,6 +264,10 @@ def _criar_cliente_mqtt() -> mqtt.Client:
     c.on_connect = _on_connect_mqtt
     c.on_message = _on_message_mqtt
     c.reconnect_delay_set(min_delay=1, max_delay=30)
+    if MQTT_USERNAME:
+        c.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+    if MQTT_TLS:
+        c.tls_set()
     return c
 
 

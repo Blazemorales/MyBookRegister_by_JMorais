@@ -400,6 +400,33 @@ async def _persistir_medicao(
 sio.on("report", rpi_data)
 
 
+@sio.on("rpi_status")
+async def rpi_status(sid: str, data: Any) -> dict:
+    """Status ao vivo de um dispositivo (ex.: lâmpada ligada/desligada).
+
+    Diferente de `rpi_data`: não é uma medição CEP, é só um flag efêmero
+    de estado. Não passa por validação de carta nem é persistido — o
+    frontend só precisa saber o estado *atual*, não o histórico (que já
+    vem pelas sessões em `relatorio_data`/`medicoes_stream`).
+    """
+    session = await sio.get_session(sid)
+    if session.get("role") != "rpi":
+        logger.warning("rpi_status de origem não-rpi recusado (sid=%s)", sid)
+        return {"ok": False, "error": "não autorizado a publicar status do RPi"}
+
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "payload deve ser um objeto JSON"}
+
+    canal = _canal_da_sessao(data.get("canal")) or "default"
+    payload = {
+        "canal": canal,
+        "aceso": bool(data.get("aceso")),
+        "received_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await sio.emit("device_status", payload, room=f"{RELATORIO_ROOM}:{canal}")
+    return {"ok": True}
+
+
 def make_asgi_app(other_asgi_app) -> socketio.ASGIApp:
     """Empacota o FastAPI (`other_asgi_app`) + Socket.IO num único ASGI app.
 

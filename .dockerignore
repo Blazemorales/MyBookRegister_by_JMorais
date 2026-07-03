@@ -1,0 +1,10 @@
+.git/
+**/venv/
+**/node_modules/
+**/__pycache__/
+**/.next/
+**/.turbo/
+raspberry_code/dados_lampada/
+raspberry_code/cep_agent/relatorios_locais.db
+cep_code/backend/CEP/relatorios/tmp_*.png
+cep_code/backend/CEP/entrega_tmp/

@@ -15,8 +15,19 @@ RPI_DEVICE_TOKEN   = os.environ["RPI_DEVICE_TOKEN"]
 MQTT_BROKER        = os.environ.get("MQTT_BROKER", "localhost")
 MQTT_PORT          = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_TOPICO_SENSOR = os.environ.get("MQTT_TOPICO_SENSOR", "jmorais/esp32s3/sensor/leitura")
+MQTT_TOPICO_LAMPADA = os.environ.get("MQTT_TOPICO_LAMPADA", "jmorais/lampada/sessao")
+MQTT_TOPICO_STATUS_LAMPADA = os.environ.get(
+    "MQTT_TOPICO_STATUS_LAMPADA", "jmorais/lampada/status"
+)
+
+# Credenciais/TLS — obrigatório quando o agente roda fora da LAN da Pi
+# (ex.: Render) e o broker precisa ficar exposto na internet.
+MQTT_USERNAME      = os.environ.get("MQTT_USERNAME") or None
+MQTT_PASSWORD      = os.environ.get("MQTT_PASSWORD") or None
+MQTT_TLS           = os.environ.get("MQTT_TLS", "false").strip().lower() in ("1", "true", "yes")
 
 CANAL              = os.environ.get("CANAL", "default")
+CANAL_LAMPADA      = os.environ.get("CANAL_LAMPADA", "lampada")
 XR_SUBGRUPO_N      = int(os.environ.get("XR_SUBGRUPO_N", "5"))
 P_CRITERIO_DEFEITO = os.environ.get("P_CRITERIO_DEFEITO", "").strip() or None
 
