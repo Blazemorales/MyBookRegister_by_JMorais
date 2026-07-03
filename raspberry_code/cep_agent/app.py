@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from config import AGENT_PORT, SCHEDULER_ENABLED
+from config import AGENT_PORT, INGEST_ENABLED, SCHEDULER_ENABLED
 from scheduler import criar_scheduler
 
 logger = logging.getLogger(__name__)
@@ -43,10 +43,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("[app] APScheduler desativado (SCHEDULER_ENABLED=false)")
 
-    # Inicia a ponte MQTT → Socket.IO em background
-    from ingest import run as run_ingest
-    _ingest_task = asyncio.create_task(run_ingest(), name="cep_ingest")
-    logger.info("[app] ponte de ingestão MQTT→Socket.IO iniciada")
+    # Inicia a ponte MQTT → Socket.IO em background — pulado se esta
+    # instância não tem acesso ao broker (ex.: Render free, sem LAN da Pi).
+    if INGEST_ENABLED:
+        from ingest import run as run_ingest
+        _ingest_task = asyncio.create_task(run_ingest(), name="cep_ingest")
+        logger.info("[app] ponte de ingestão MQTT→Socket.IO iniciada")
+    else:
+        logger.info("[app] ingestão MQTT desativada (INGEST_ENABLED=false)")
 
     try:
         yield

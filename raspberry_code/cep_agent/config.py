@@ -35,6 +35,11 @@ AGENT_PORT         = int(os.environ.get("AGENT_PORT", "8080"))
 TZ                 = os.environ.get("TZ", "America/Sao_Paulo")
 
 # Desative quando o disparo diário/mensal for feito por outro agendador
-# (ex.: Render Cron Job — ver raspberry_code/render-free.yaml) para não
+# (ex.: GitHub Actions — ver raspberry_code/render-free.yaml) para não
 # gerar o mesmo relatório duas vezes.
 SCHEDULER_ENABLED  = os.environ.get("SCHEDULER_ENABLED", "true").strip().lower() in ("1", "true", "yes")
+
+# Desative quando esta instância não tem acesso ao broker MQTT da Pi
+# (ex.: rodando no Render free — o broker só existe na LAN da Pi). O
+# ingest.py continua rodando normalmente na própria Pi via cep-agent.service.
+INGEST_ENABLED     = os.environ.get("INGEST_ENABLED", "true").strip().lower() in ("1", "true", "yes")

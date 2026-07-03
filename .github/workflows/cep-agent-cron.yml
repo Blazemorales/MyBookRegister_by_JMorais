@@ -1,0 +1,43 @@
+name: Disparar relatórios do CEP Agent (Render free)
+
+# O cep_agent no Render free dorme sem tráfego, então o APScheduler
+# interno não é confiável (SCHEDULER_ENABLED=false nesse deploy — ver
+# raspberry_code/render-free.yaml). Este workflow acorda o serviço e
+# dispara os endpoints /run/diario e /run/mensal nos horários certos.
+#
+# Requer o secret CEP_AGENT_URL no repositório (Settings > Secrets and
+# variables > Actions), com a URL pública do serviço no Render, sem
+# barra no final. Ex.: https://tpe-cep-agent.onrender.com
+
+on:
+  schedule:
+    # Horários em UTC (BRT = UTC-3 o ano todo, sem horário de verão desde 2019).
+    - cron: "0 6 * * *"   # 03:00 BRT — diário
+    - cron: "5 6 1 * *"   # 03:05 BRT, dia 1 — mensal
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job a disparar manualmente"
+        type: choice
+        options: [diario, mensal]
+        default: diario
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Disparar job diário
+        if: >
+          github.event.schedule == '0 6 * * *' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'diario')
+        run: |
+          curl -fsS -X POST --max-time 120 --retry 2 --retry-delay 20 \
+            "${{ secrets.CEP_AGENT_URL }}/run/diario"
+
+      - name: Disparar job mensal
+        if: >
+          github.event.schedule == '5 6 1 * *' ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'mensal')
+        run: |
+          curl -fsS -X POST --max-time 120 --retry 2 --retry-delay 20 \
+            "${{ secrets.CEP_AGENT_URL }}/run/mensal"
