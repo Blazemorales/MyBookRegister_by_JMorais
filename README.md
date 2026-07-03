@@ -114,11 +114,18 @@ O firmware web usa só bibliotecas que **já vêm no core** (`WiFi.h`,
 ### 4. Configurar e carregar o sketch
 
 1. Abra `esp32s3_web_lampada.ino`.
-2. Edite o topo do arquivo:
+2. Edite o topo do arquivo com os **seus** dados:
    ```cpp
-   const char* WIFI_SSID     = "SUA_REDE";
-   const char* WIFI_PASSWORD = "SUA_SENHA";
+   const char* MATRICULA    = "SUA_MATRICULA";
+   const char* EAP_PASSWORD = "SUA_SENHA_UNB";
    ```
+   (o firmware já vem pronto pra WPA2-Enterprise da UnB — eduroam/UNB
+   Wireless. Pra usar numa rede doméstica comum, troque a lógica de
+   `WiFi.begin(...)` em `tentarRede()` por `WiFi.begin(ssid, senha)`.)
+
+   > ⚠️ **Nunca dê commit neste arquivo com valores reais** em `MATRICULA`/
+   > `EAP_PASSWORD` — são credenciais pessoais. Edite localmente antes de
+   > gravar e não suba essa alteração pro git (ou reverta antes de commitar).
 3. Conecte a placa por USB e selecione a porta em **Tools → Port**
    (Linux: `/dev/ttyACM0` ou `/dev/ttyUSB0`; Windows: `COMx`).
 4. Clique em **Upload** (→).

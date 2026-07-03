@@ -16,9 +16,13 @@
 //   - eduroam:      usuário = e-mail completo (matricula@aluno.unb.br)
 //   - UNB Wireless: usuário = matrícula sem @aluno.unb.br
 //   - Identidade anônima em branco, sem certificado CA, MSCHAPv2
+//
+//  Preencha com os SEUS dados antes de gravar — NUNCA faça commit deste
+//  arquivo com valores reais aqui (veja "Configurar e carregar o sketch"
+//  no README.md).
 // ============================================================================
-const char* MATRICULA    = "***REMOVIDO***";
-const char* EAP_PASSWORD = "***REMOVIDO***";  // senha do domínio UnB (mesma do e-mail/SIGAA)
+const char* MATRICULA    = "SUA_MATRICULA";
+const char* EAP_PASSWORD = "SUA_SENHA_UNB";  // mesma senha do e-mail/SIGAA
 
 struct RedeUnB {
   const char* ssid;
