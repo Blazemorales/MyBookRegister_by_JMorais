@@ -301,6 +301,32 @@ Pra fechar um dia específico na mão (ex.: recuperar um dia perdido):
 > desligada na hora do timer (23:59), `Persistent=true` faz ele rodar assim
 > que ela voltar.
 
+### 4. (Opcional) Consolidar tudo sob o mesmo hostname com nginx
+
+Por padrão, o túnel aponta **direto pra ESP32** (seção anterior) e as
+estatísticas ficam só na rede local (`curl` na própria Pi). Se você quiser
+que o **mesmo hostname público** sirva tanto o controle da lâmpada quanto as
+estatísticas, coloque a Pi como proxy reverso único na frente da ESP32:
+
+```
+Cloudflare Tunnel ──► nginx (Pi, :80) ──┬──► ESP32 (/, /on, /off, /toggle, /state)
+                                        └──► lampada_stats.py (/stats/hoje)
+```
+
+```bash
+cd /home/pi/MyBookRegister_by_JMorais/raspberry_code
+bash setup_nginx_lampada.sh <IP_da_ESP32>
+```
+
+Isso instala o nginx e aplica `nginx-lampada.conf`. Depois, no dashboard do
+túnel, troque o **Public Hostname** de `http://<IP_da_ESP32>:80` para
+`http://localhost:80` (o nginx passa a ser o único ponto de entrada).
+
+> ⚠️ O endpoint de ingestão `POST /lampada` (que a ESP32 usa pra mandar os
+> eventos) **não** é exposto pelo nginx/túnel — ele não tem autenticação, e
+> a ESP32 já fala direto com a Pi pela rede local via `RASPBERRY_URL`. Só
+> `/stats/hoje` (leitura) fica público.
+
 ---
 
 ## 📁 Estrutura do projeto
@@ -319,6 +345,8 @@ Pra fechar um dia específico na mão (ex.: recuperar um dia perdido):
 │   ├── lampada-relatorio.service  # Job (oneshot) do relatório diário
 │   ├── lampada-relatorio.timer    # Agenda o job diário (23:59 BRT)
 │   ├── dados_lampada/             # eventos.jsonl, estado.json, relatorio_<data>.json (gerados em runtime)
+│   ├── nginx-lampada.conf         # (Opcional) proxy reverso único: ESP32 + stats sob o mesmo hostname
+│   ├── setup_nginx_lampada.sh     # Instala/configura o nginx acima
 │   └── README_raspberry.md        # Guia do lado da Pi (variante MQTT)
 ├── esquematico_svg/           # Desenho das ligações (relé + ESP32 + lâmpada)
 └── README.md                  # Este arquivo
@@ -358,6 +386,8 @@ Pra fechar um dia específico na mão (ex.: recuperar um dia perdido):
 | Página pública pede login que não chega | No Access, confira o método (e-mail OTP: veja spam; Google: use a conta cadastrada na política) |
 | `curl` retorna HTML de login em vez do JSON | A política de Access está bloqueando a chamada; use um **Service Token** (`CF-Access-Client-Id`/`CF-Access-Client-Secret`) para automação |
 | Quero MQTT de fora de casa | O Tunnel não expõe TCP cru (porta 1883). Use MQTT sobre **WebSockets** (listener 9001 no mosquitto) ou a API Flask em `raspberry_code/` |
+| 502 depois de configurar o nginx (`setup_nginx_lampada.sh`) | `sudo nginx -t` mostra o erro de config; confira se o IP da ESP32 em `/etc/nginx/sites-available/lampada` está certo e se `curl -I http://<IP_da_ESP32>` funciona a partir da Pi |
+| `/stats/hoje` dá 502 mas `/` funciona | `lampada-stats.service` não está no ar: `systemctl status lampada-stats` |
 
 ### Estatísticas de uso
 
