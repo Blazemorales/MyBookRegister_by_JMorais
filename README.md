@@ -179,13 +179,38 @@ No dashboard do túnel, aba **Public Hostname**:
 
 Pronto: `https://lampada.seudominio.com` abre a página da ESP32 de qualquer lugar.
 
-### 4. Proteger o acesso (importante!)
+### 4. Controlar remotamente (linha de comando)
+
+Com o hostname configurado, esses comandos funcionam de **qualquer rede** —
+4G, outra cidade, outro país:
+
+```bash
+curl https://lampada.seudominio.com/on       # liga
+curl https://lampada.seudominio.com/off      # desliga
+curl https://lampada.seudominio.com/toggle   # alterna
+curl https://lampada.seudominio.com/state    # {"aceso":true,"ligadoHa":123}
+```
+
+Pelo navegador, `https://lampada.seudominio.com/` abre a mesma página com os
+três botões que aparece na rede local.
+
+### 5. Proteger o acesso (importante!)
 
 Sem proteção, **qualquer pessoa com a URL controla sua lâmpada**. No Zero Trust:
 **Access → Applications → Add application** → selecione o hostname → crie uma
 política exigindo login (Google ou e-mail com código OTP).
 
-### 5. Verificar se o túnel está funcionando
+Depois de criar a política, chamadas automatizadas (script, atalho no
+celular) que não passam por login de navegador precisam de um **Service
+Token** (Access → Service Auth → Create Service Token):
+
+```bash
+curl https://lampada.seudominio.com/on \
+  -H "CF-Access-Client-Id: <ID>" \
+  -H "CF-Access-Client-Secret: <SECRET>"
+```
+
+### 6. Verificar se o túnel está funcionando
 
 ```bash
 systemctl status cloudflared --no-pager   # deve estar "active (running)"
@@ -331,6 +356,7 @@ Pra fechar um dia específico na mão (ex.: recuperar um dia perdido):
 | URL pública abre em branco / 502 | A Pi não alcança a ESP32: `curl -I http://<IP_da_ESP32>` na Pi; confira se o IP da ESP32 mudou (→ reserva de DHCP) |
 | URL funciona em casa, mas não no 4G | DNS ainda propagando (aguarde alguns minutos) ou política de Access bloqueando seu login |
 | Página pública pede login que não chega | No Access, confira o método (e-mail OTP: veja spam; Google: use a conta cadastrada na política) |
+| `curl` retorna HTML de login em vez do JSON | A política de Access está bloqueando a chamada; use um **Service Token** (`CF-Access-Client-Id`/`CF-Access-Client-Secret`) para automação |
 | Quero MQTT de fora de casa | O Tunnel não expõe TCP cru (porta 1883). Use MQTT sobre **WebSockets** (listener 9001 no mosquitto) ou a API Flask em `raspberry_code/` |
 
 ### Estatísticas de uso

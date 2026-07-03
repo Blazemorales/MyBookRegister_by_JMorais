@@ -9,6 +9,7 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include "credenciais.h"
 
 // ============================================================================
 //  CONFIGURAÇÃO REDES UnB - WPA2-Enterprise (PEAP/MSCHAPv2)
@@ -16,9 +17,8 @@
 //   - eduroam:      usuário = e-mail completo (matricula@aluno.unb.br)
 //   - UNB Wireless: usuário = matrícula sem @aluno.unb.br
 //   - Identidade anônima em branco, sem certificado CA, MSCHAPv2
+//  MATRICULA e EAP_PASSWORD vêm de credenciais.h (não versionado).
 // ============================================================================
-const char* MATRICULA    = "***REMOVIDO***";
-const char* EAP_PASSWORD = "***REMOVIDO***";  // senha do domínio UnB (mesma do e-mail/SIGAA)
 
 struct RedeUnB {
   const char* ssid;
@@ -66,6 +66,7 @@ void enviarParaRaspberry() {
   http.begin(RASPBERRY_URL);
   http.addHeader("Content-Type", "application/json");
   http.setTimeout(2000);  // recurso opcional: não trava o botão se a Pi estiver fora
+
   int codigo = http.POST(payload);
 
   if (codigo > 0) {

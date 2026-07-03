@@ -36,3 +36,6 @@ raspberry_code/cep_agent/relatorios_locais.db
 raspberry_code/dados_lampada/*
 !raspberry_code/dados_lampada/.gitkeep
 
+# Credenciais Wi-Fi (UnB eduroam) do ESP32 - nunca commitar
+esp32_code/**/credenciais.h
+
