@@ -3,8 +3,8 @@ Description=Gera o relatório diário de uso da lâmpada — Raspberry Pi
 
 [Service]
 Type=oneshot
-User=pi
-WorkingDirectory=/home/pi/MyBookRegister_by_JMorais/raspberry_code
-ExecStart=/home/pi/MyBookRegister_by_JMorais/venv_lampada/bin/python gerar_relatorio_lampada.py
+User=mrmorais
+WorkingDirectory=/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code
+ExecStart=/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv_lampada/bin/python gerar_relatorio_lampada.py
 StandardOutput=journal
 StandardError=journal

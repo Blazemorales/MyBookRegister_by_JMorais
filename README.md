@@ -256,9 +256,9 @@ pra ele nunca mudar.
 ### 2. Subir o receptor de eventos na Pi
 
 ```bash
-cd /home/pi/MyBookRegister_by_JMorais/raspberry_code
-python3 -m venv /home/pi/MyBookRegister_by_JMorais/venv_lampada
-/home/pi/MyBookRegister_by_JMorais/venv_lampada/bin/pip install -r requirements.txt
+cd /home/mrmorais/MyBookRegister_by_JMorais/raspberry_code
+python3 -m venv /home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv_lampada
+/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv_lampada/bin/pip install -r requirements.txt
 
 sudo cp lampada-stats.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -314,7 +314,7 @@ Cloudflare Tunnel ──► nginx (Pi, :80) ──┬──► ESP32 (/, /on, /o
 ```
 
 ```bash
-cd /home/pi/MyBookRegister_by_JMorais/raspberry_code
+cd /home/mrmorais/MyBookRegister_by_JMorais/raspberry_code
 bash setup_nginx_lampada.sh <IP_da_ESP32>
 ```
 
@@ -393,10 +393,10 @@ túnel, troque o **Public Hostname** de `http://<IP_da_ESP32>:80` para
 
 | Problema | Solução |
 |----------|---------|
-| `lampada-stats` não sobe | `journalctl -u lampada-stats -n 50`; confira se o venv em `venv_lampada` existe e tem `flask`/`gunicorn` |
+| `lampada-stats` não sobe | `journalctl -u lampada-stats -n 50`; confira se o venv em `raspberry_code/venv_lampada` existe e tem `flask`/`gunicorn` |
 | `/lampada/hoje` sempre retorna 0 | A ESP32 está postando pro IP certo? Confira `RASPBERRY_URL` no `.ino` e teste `curl -X POST http://localhost:5000/lampada -d '{"aceso":true}' -H 'Content-Type: application/json'` direto na Pi |
 | Relatório do dia não foi gerado | `systemctl list-timers lampada-relatorio.timer`; rode na mão com `gerar_relatorio_lampada.py` para ver o erro |
-| Quero reprocessar um dia antigo | `venv_lampada/bin/python gerar_relatorio_lampada.py AAAA-MM-DD` (os eventos brutos ficam em `dados_lampada/eventos.jsonl`) |
+| Quero reprocessar um dia antigo | `venv_lampada/bin/python gerar_relatorio_lampada.py AAAA-MM-DD` (rodar de dentro de `raspberry_code/`; os eventos brutos ficam em `dados_lampada/eventos.jsonl`) |
 
 ---
 

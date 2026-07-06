@@ -52,14 +52,14 @@ python3 mqtt_test.py 192.168.0.42   # broker em outro IP
 ## 2. API de controle (`control_led.py`)
 
 ```bash
-python3 -m venv /home/pi/MyBookRegister_by_JMorais/venv_led_api
-/home/pi/MyBookRegister_by_JMorais/venv_led_api/bin/pip install -r requirements.txt
+python3 -m venv /home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv
+/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv/bin/pip install -r requirements.txt
 ```
 
 Teste manual (modo Flask dev, porta 5000):
 
 ```bash
-/home/pi/MyBookRegister_by_JMorais/venv_led_api/bin/python control_led.py
+/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv/bin/python control_led.py
 curl http://127.0.0.1:5000/led/state
 ```
 
@@ -93,8 +93,8 @@ Loga no journal quando a ESP32 fica online/offline (usa o mesmo tópico de
 disponibilidade/LWT que a API já consome):
 
 ```bash
-sudo cp esp32-watchdog.sh /home/pi/esp32-mqtt/esp32-watchdog.sh
-sudo chmod +x /home/pi/esp32-mqtt/esp32-watchdog.sh
+sudo cp esp32-watchdog.sh /home/mrmorais/esp32-mqtt/esp32-watchdog.sh
+sudo chmod +x /home/mrmorais/esp32-mqtt/esp32-watchdog.sh
 sudo cp esp32-watchdog.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now esp32-watchdog
@@ -107,7 +107,7 @@ journalctl -u esp32-watchdog -f
 
 | Problema | Solução |
 |----------|---------|
-| `led-api` não sobe | `journalctl -u led-api -n 50`; confira se o venv em `venv_led_api` existe e tem as libs de `requirements.txt` |
+| `led-api` não sobe | `journalctl -u led-api -n 50`; confira se o venv em `raspberry_code/venv` existe e tem as libs de `requirements.txt` |
 | `/led/state` sempre retorna `aceso: null` | A API ainda não recebeu nenhuma mensagem retida no tópico de estado — publique um comando primeiro, ou confira se a ESP32 está publicando com `retain=true` |
 | `/led/state` retorna `online: false` mesmo com a ESP32 ligada | Confira o LWT (Last Will) da ESP32: tópico `jmorais/esp32s3/led/disponibilidade`, payload `online`/`offline` |
 | Mosquitto recusa conexão de fora da Pi | Confira `listener 1883 0.0.0.0` em `local.conf` e se o firewall (se houver) libera a porta na rede local |
@@ -117,18 +117,18 @@ journalctl -u esp32-watchdog -f
 
 ## Resumo rápido (copiar e colar na Pi)
 
-Assume o repo já clonado em `/home/pi/MyBookRegister_by_JMorais` (veja o
+Assume o repo já clonado em `/home/mrmorais/MyBookRegister_by_JMorais` (veja o
 passo a passo completo acima se for a primeira vez).
 
 ```bash
-cd /home/pi/MyBookRegister_by_JMorais/raspberry_code
+cd /home/mrmorais/MyBookRegister_by_JMorais/raspberry_code
 
 # 1. broker MQTT
 bash setup_mosquitto.sh
 
 # 2. API de controle (venv + serviço)
-python3 -m venv /home/pi/MyBookRegister_by_JMorais/venv_led_api
-/home/pi/MyBookRegister_by_JMorais/venv_led_api/bin/pip install -r requirements.txt
+python3 -m venv /home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv
+/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv/bin/pip install -r requirements.txt
 sudo cp led-api.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now led-api

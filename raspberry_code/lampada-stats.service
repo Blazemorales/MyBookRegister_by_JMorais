@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/MyBookRegister_by_JMorais/raspberry_code
-ExecStart=/home/pi/MyBookRegister_by_JMorais/venv_lampada/bin/gunicorn -w 1 -b 0.0.0.0:5000 lampada_stats:app
+User=mrmorais
+WorkingDirectory=/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code
+ExecStart=/home/mrmorais/MyBookRegister_by_JMorais/raspberry_code/venv_lampada/bin/gunicorn -w 1 -b 0.0.0.0:5000 lampada_stats:app
 Restart=always
 RestartSec=10
 StandardOutput=journal
