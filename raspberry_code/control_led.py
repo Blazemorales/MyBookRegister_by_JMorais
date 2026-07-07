@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 ============================================================================
  control_led.py  —  API de controle da lâmpada, rodando na Raspberry Pi
@@ -106,4 +107,4 @@ def root():
 
 if __name__ == "__main__":
     # modo de teste; em produção use o gunicorn (ver README)
-    app.run(host="127.0.0.1", port=5000)
+    app.run(host="0.0.0.0", port=5000)
