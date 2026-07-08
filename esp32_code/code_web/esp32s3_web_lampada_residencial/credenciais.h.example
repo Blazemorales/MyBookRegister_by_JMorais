@@ -1,6 +1,0 @@
-// Copie este arquivo para "credenciais.h" (mesma pasta) e preencha com os
-// dados reais. "credenciais.h" está no .gitignore e nunca deve ser commitado.
-#pragma once
-
-const char* WIFI_SSID     = "SUA_REDE_RESIDENCIAL";
-const char* WIFI_PASSWORD = "SUA_SENHA_RESIDENCIAL";

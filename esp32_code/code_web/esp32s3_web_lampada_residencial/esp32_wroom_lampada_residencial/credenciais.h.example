@@ -1,0 +1,21 @@
+// Copie este arquivo para "credenciais.h" (mesma pasta) e preencha com os
+// dados reais. "credenciais.h" está no .gitignore e nunca deve ser commitado.
+//
+// Rede WPA2-Enterprise (PEAP/MSCHAPv2) da UnB:
+//  - UNB Wireless: EAP_USERNAME = matrícula (sem @aluno.unb.br)
+//  - eduroam:      EAP_USERNAME = matrícula@aluno.unb.br
+//  - EAP_IDENTITY em branco (identidade anônima), sem certificado CA
+#ifndef CREDENCIAIS_H
+#define CREDENCIAIS_H
+
+// Rede UnB (WPA2-Enterprise / PEAP-MSCHAPv2)
+const char* ssid         = "UNB Wireless";
+const char* EAP_IDENTITY = "";
+const char* EAP_USERNAME = "SUA_MATRICULA";
+const char* EAP_PASSWORD = "SUA_SENHA_UNB";
+
+// Rede residencial (WPA2-Personal)
+const char* WIFI_SSID_CASA     = "SUA_REDE_CASA";
+const char* WIFI_PASSWORD_CASA = "SUA_SENHA_CASA";
+
+#endif

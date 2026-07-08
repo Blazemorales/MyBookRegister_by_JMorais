@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Servidor Embarcado em MCU - Entrega</title>
+<style>
+  @page { size: A4; margin: 14mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 10.5pt;
+    line-height: 1.35;
+    margin: 0;
+  }
+  header {
+    text-align: center;
+    border-bottom: 2px solid #14532d;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+  header h1 {
+    font-size: 16pt;
+    margin: 0 0 2px;
+    color: #14532d;
+  }
+  header .sub {
+    font-size: 9.5pt;
+    color: #333;
+    margin: 1px 0;
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9pt;
+    color: #444;
+    margin-top: 6px;
+  }
+  h2 {
+    font-size: 11pt;
+    color: #14532d;
+    border-left: 4px solid #14532d;
+    padding-left: 6px;
+    margin: 10px 0 4px;
+  }
+  p { margin: 3px 0; text-align: justify; }
+  ul { margin: 3px 0 3px 18px; padding: 0; }
+  li { margin-bottom: 2px; }
+  .arch {
+    background: #f4f6f4;
+    border: 1px solid #cdd6cd;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: "Courier New", monospace;
+    font-size: 8.5pt;
+    white-space: pre;
+    line-height: 1.3;
+    margin: 4px 0;
+  }
+  table.req {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin: 4px 0;
+  }
+  table.req th, table.req td {
+    border: 1px solid #cdd6cd;
+    padding: 3px 6px;
+    text-align: left;
+  }
+  table.req th {
+    background: #e8efe8;
+    color: #14532d;
+  }
+  .evidencias {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .placeholder {
+    border: 1.5px dashed #8a9a8a;
+    border-radius: 6px;
+    height: 34mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 8.5pt;
+    color: #556;
+    padding: 4px;
+    background: #fafbfa;
+  }
+  footer {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #cdd6cd;
+    font-size: 8.5pt;
+    color: #444;
+    text-align: center;
+  }
+  a { color: #14532d; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Servidor Embarcado em MCU — Controle Remoto de Lâmpada via ESP32</h1>
+  <div class="sub">Controle Estatístico Remoto de Processo — Tópicos Especiais em Eletrônica</div>
+  <div class="sub">Prof. Henrique Gomes de Moura, Dr. Eng.</div>
+  <div class="meta">
+    <span><strong>Aluno:</strong> João Pedro de Morais Cunha — Matrícula 241011161</span>
+    <span><strong>Repositório:</strong> github.com/Blazemorais/MyBookRegister_by_JMorais</span>
+  </div>
+</header>
+
+<h2>Objetivo</h2>
+<p>
+Demonstrar um servidor embarcado em MCU (ESP32) capaz de expor, publicamente pela
+internet e via HTTP/HTTPS, o estado real de um atuador (lâmpada DC 12V acionada por
+relé) e de receber um sinal de ação — enviado manualmente pelo operador a partir da
+interpretação do estado exibido remotamente. O acesso público não depende de
+plataformas de terceiros (Arduino Cloud ou similar): o servidor web roda inteiramente
+no próprio ESP32.
+</p>
+
+<h2>Arquitetura</h2>
+<div class="arch">navegador (qualquer lugar, ex.: 4G)
+        |  HTTPS publico
+        v
+Cloudflare Tunnel  &lt;-- cloudflared rodando na Raspberry Pi
+        |  HTTP (rede local)
+        v
+ESP32 -- servidor web embutido (WebServer.h), sem dependencia de nuvem de terceiros
+        |  GPIO4 (digitalWrite/digitalRead)
+        v
+Modulo rele 5V (SRD-05VDC-SL-C)  --contatos COM/NO-->  Lampada DC 12V</div>
+<p>
+A ESP32 conecta automaticamente na rede disponível — <strong>UnB Wireless</strong>
+(WPA2-Enterprise/PEAP-MSCHAPv2) ou <strong>rede residencial</strong> (WPA2-Personal) —
+escaneando as redes visíveis a cada boot/reconexão, sem precisar reprogramar o
+firmware ao trocar de local.
+</p>
+
+<h2>Como os requisitos do trabalho são atendidos</h2>
+<table class="req">
+<tr><th>Requisito</th><th>Implementação</th></tr>
+<tr><td>Acesso remoto via HTTP/HTTPS, publicamente</td><td>Cloudflare Tunnel expõe o servidor da ESP32 num hostname HTTPS público, acessível de qualquer rede (não USB/Bluetooth/WiFi Direct)</td></tr>
+<tr><td>Leitura de dado real, sem simulação</td><td>O estado exibido (ligada/desligada) é lido diretamente do pino físico do relé via <code>digitalRead()</code>, refletindo o acionamento real do circuito</td></tr>
+<tr><td>Sinal de ação por interpretação da leitura</td><td>Ação <strong>manual</strong>: o operador acompanha o estado remotamente e decide ligar/desligar pelos botões da página web</td></tr>
+<tr><td>Sem plataforma de terceiros (Arduino Cloud etc.)</td><td>Servidor web nativo no ESP32 (<code>WebServer.h</code>); o Cloudflare Tunnel é só infraestrutura de rede, não hospeda lógica do projeto</td></tr>
+</table>
+
+<h2>Evidências funcionais e visuais</h2>
+<div class="evidencias">
+  <div class="placeholder">[ Foto do circuito montado: ESP32 + módulo relé + lâmpada DC 12V ]</div>
+  <div class="placeholder">[ Print da página web na rede local, mostrando os botões e o estado da lâmpada ]</div>
+  <div class="placeholder">[ Print do acesso via URL pública HTTPS, fora da rede local (ex.: 4G) ]</div>
+  <div class="placeholder">[ Print do Serial Monitor: conexão Wi-Fi e IP obtido ]</div>
+</div>
+
+<footer>
+  Código-fonte completo do firmware: <em>esp32_code/code_web/esp32s3_web_lampada_residencial/esp32_wroom_lampada_residencial/código_esp.ino</em>
+  — Repositório: https://github.com/Blazemorais/MyBookRegister_by_JMorais
+</footer>
+
+</body>
+</html>

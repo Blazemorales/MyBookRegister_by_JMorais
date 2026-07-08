@@ -41,19 +41,20 @@ Lâmpada DC 12V  (fonte 12V própria, via jack P4)
 
 **Como as placas trabalham juntas:**
 
-- A **ESP32** conecta no Wi-Fi de casa e sobe uma página web com botões
-  Ligar / Desligar / Alternar. Quando você aperta um botão, ela muda o nível do
-  GPIO4, que aciona o relé — e o relé fecha o circuito da lâmpada.
+- A **ESP32** escaneia as redes disponíveis e conecta automaticamente na
+  **UnB Wireless** (WPA2-Enterprise) ou na **rede residencial** (WPA2-Personal),
+  o que estiver no ar — e sobe uma página web com botões Ligar / Desligar.
+  Quando você aperta um botão, ela muda o nível do GPIO4, que aciona o relé —
+  e o relé fecha o circuito da lâmpada.
 - A **Raspberry Pi** não controla a lâmpada: o papel dela é rodar o
   `cloudflared`, criando um túnel de saída até a Cloudflare. Quem acessa a URL
   pública chega até a página da ESP32 sem que nenhuma porta do roteador seja
   aberta.
-- A Pi também funciona como um **segundo cérebro**: a cada vez que a ESP32
-  liga/desliga a lâmpada, ela manda um evento pra Pi (`RASPBERRY_URL` no
-  `.ino`), que registra a duração de cada sessão e, uma vez por dia, fecha um
-  JSON com as horas em que a lâmpada ficou acesa (veja
-  [Estatísticas de uso](#-estatísticas-de-uso-opcional)).
 - A carga (12V) fica **isolada** da parte lógica pelos contatos do relé.
+
+> 💡 O firmware atual (`código_esp.ino`) não manda mais eventos pra Pi — a
+> seção [Estatísticas de uso](#-estatísticas-de-uso-opcional) documenta um
+> recurso **legado/opcional** que exige recolocar esse envio no código.
 
 ---
 
@@ -61,7 +62,7 @@ Lâmpada DC 12V  (fonte 12V própria, via jack P4)
 
 | Item | Observação |
 |------|------------|
-| ESP32 (DevKit) | Testado com ESP32-S3-N16R8 e ESP32 WROOM-32 |
+| ESP32 (DevKit) | Firmware atual em `esp32_wroom_lampada_residencial/` (ESP32 WROOM-32). Também testado em ESP32-S3-N16R8 |
 | Módulo relé 1 canal 5V | SONGLE SRD-05VDC-SL-C (tipo KY-019) |
 | Lâmpada **DC 12V** + bocal | ⚠️ NÃO usar lâmpada de tomada (AC) |
 | Fonte 12V DC com jack P4 | Corrente ≥ a da lâmpada, com folga |
@@ -107,25 +108,33 @@ GND    ───────► −  (GND)             NO ───────�
 
 ### 3. Bibliotecas
 
-O firmware web usa só bibliotecas que **já vêm no core** (`WiFi.h`,
-`WebServer.h`, `ESPmDNS.h`) — nada a instalar.
-(Somente a variante MQTT exige a **PubSubClient**, via Library Manager.)
+O firmware usa só bibliotecas que **já vêm no core** (`WiFi.h`, `WebServer.h`,
+`esp_wpa2.h`) — nada a instalar.
 
 ### 4. Configurar e carregar o sketch
 
-1. Abra `esp32s3_web_lampada.ino`.
-2. Edite o topo do arquivo:
+1. Abra `esp32_code/code_web/esp32s3_web_lampada_residencial/esp32_wroom_lampada_residencial/código_esp.ino`.
+2. Copie `credenciais.h.example` para `credenciais.h` (mesma pasta) e preencha
+   com os dados reais — **UnB** (WPA2-Enterprise) e **residencial** (WPA2-Personal):
    ```cpp
-   const char* WIFI_SSID     = "SUA_REDE";
-   const char* WIFI_PASSWORD = "SUA_SENHA";
+   const char* ssid         = "UNB Wireless";
+   const char* EAP_IDENTITY = "";
+   const char* EAP_USERNAME = "SUA_MATRICULA";
+   const char* EAP_PASSWORD = "SUA_SENHA_UNB";
+
+   const char* WIFI_SSID_CASA     = "SUA_REDE_CASA";
+   const char* WIFI_PASSWORD_CASA = "SUA_SENHA_CASA";
    ```
+   `credenciais.h` está no `.gitignore` e nunca deve ser commitado. No boot (e
+   a cada reconexão), o firmware escaneia as redes visíveis e conecta na UnB
+   ou na residencial, o que estiver no ar.
 3. Conecte a placa por USB e selecione a porta em **Tools → Port**
    (Linux: `/dev/ttyACM0` ou `/dev/ttyUSB0`; Windows: `COMx`).
 4. Clique em **Upload** (→).
    - Se travar em `Connecting...`: segure **BOOT**, toque **RESET**, solte.
 5. Abra o **Serial Monitor** a `115200` e anote o IP:
    ```
-   [WiFi] OK!  Acesse:  http://192.168.0.42   ou   http://lampada.local
+   Conectado! Acesse pelo navegador: http://192.168.0.42
    ```
 
 > 💡 Depois de gravado, o sketch fica salvo na flash: a ESP32 roda sozinha em
@@ -187,12 +196,10 @@ Com o hostname configurado, esses comandos funcionam de **qualquer rede** —
 ```bash
 curl https://lampada.seudominio.com/on       # liga
 curl https://lampada.seudominio.com/off      # desliga
-curl https://lampada.seudominio.com/toggle   # alterna
-curl https://lampada.seudominio.com/state    # {"aceso":true,"ligadoHa":123}
 ```
 
 Pelo navegador, `https://lampada.seudominio.com/` abre a mesma página com os
-três botões que aparece na rede local.
+botões Ligar/Desligar que aparece na rede local.
 
 ### 5. Proteger o acesso (importante!)
 
@@ -226,7 +233,13 @@ fora do Wi-Fi de casa (4G/5G).
 
 ---
 
-## 📊 Estatísticas de uso (opcional)
+## 📊 Estatísticas de uso (legado/opcional)
+
+> ⚠️ **Recurso legado**: o firmware atual (`código_esp.ino`) **não envia mais**
+> os eventos POST pra Pi (não tem `RASPBERRY_URL`). Os scripts abaixo ainda
+> estão no repo, mas só voltam a funcionar se você recolocar o envio do evento
+> no `.ino` (veja o `enviarParaRaspberry()` do firmware antigo no histórico do
+> git como referência).
 
 Além do túnel, a Pi pode virar um **segundo cérebro**: ela recebe um evento
 da ESP32 a cada vez que a lâmpada liga/desliga e, uma vez por dia, fecha um
@@ -244,7 +257,7 @@ ESP32 ──POST /lampada──► lampada_stats.py (Flask, :5000, na Pi)
 
 ### 1. Apontar a ESP32 pra Pi
 
-No `esp32s3_web_lampada.ino`, edite (junto com `WIFI_SSID`/`WIFI_PASSWORD`):
+No `.ino`, ao recolocar o envio do evento, defina:
 
 ```cpp
 const char* RASPBERRY_URL = "http://<IP_da_Pi>:5000/lampada";
@@ -334,16 +347,19 @@ túnel, troque o **Public Hostname** de `http://<IP_da_ESP32>:80` para
 ```
 .
 ├── esp32_code/
-│   ├── code_web/esp32s3_web_lampada/esp32s3_web_lampada.ino   # Firmware principal (web + túnel)
-│   └── code_bluetooth/esp32_ble_lampada/esp32_ble_lampada.ino # Variante Bluetooth (BLE, controle local)
+│   └── code_web/esp32s3_web_lampada_residencial/
+│       └── esp32_wroom_lampada_residencial/
+│           ├── código_esp.ino          # Firmware atual (web + túnel, rede UnB ou residencial)
+│           ├── credenciais.h.example   # Modelo de credenciais (copiar p/ credenciais.h)
+│           └── credenciais.h           # Credenciais reais (git-ignored, não versionado)
 ├── raspberry_code/
-│   ├── control_led.py             # (Só p/ variante MQTT) API Flask na Pi
-│   ├── led-api.service            # (Só p/ variante MQTT) serviço systemd
-│   ├── lampada_stats.py           # Receptor de eventos da ESP32 (POST /lampada)
-│   ├── lampada-stats.service      # Serviço systemd do receptor
-│   ├── gerar_relatorio_lampada.py # Fecha o JSON diário de horas ligada
-│   ├── lampada-relatorio.service  # Job (oneshot) do relatório diário
-│   ├── lampada-relatorio.timer    # Agenda o job diário (23:59 BRT)
+│   ├── control_led.py             # (Legado, variante MQTT) API Flask na Pi
+│   ├── led-api.service            # (Legado, variante MQTT) serviço systemd
+│   ├── lampada_stats.py           # (Legado/opcional) receptor de eventos (POST /lampada)
+│   ├── lampada-stats.service      # (Legado/opcional) serviço systemd do receptor
+│   ├── gerar_relatorio_lampada.py # (Legado/opcional) fecha o JSON diário de horas ligada
+│   ├── lampada-relatorio.service  # (Legado/opcional) job (oneshot) do relatório diário
+│   ├── lampada-relatorio.timer    # (Legado/opcional) agenda o job diário (23:59 BRT)
 │   ├── dados_lampada/             # eventos.jsonl, estado.json, relatorio_<data>.json (gerados em runtime)
 │   ├── nginx-lampada.conf         # (Opcional) proxy reverso único: ESP32 + stats sob o mesmo hostname
 │   ├── setup_nginx_lampada.sh     # Instala/configura o nginx acima
@@ -352,10 +368,10 @@ túnel, troque o **Public Hostname** de `http://<IP_da_ESP32>:80` para
 └── README.md                  # Este arquivo
 ```
 
-**Qual firmware usar?**
-- `esp32s3_web_lampada.ino` — o principal (web + túnel). Comece por ele.
-- `esp32s3_mqtt_led.ino` — se quiser integrar com automação/Home Assistant.
-- `esp32_ble_lampada.ino` — controle local pelo celular via Bluetooth (sem Wi-Fi).
+**Firmware atual:** `código_esp.ino` — servidor web simples (`/`, `/on`, `/off`)
+que conecta automaticamente na UnB Wireless ou na rede residencial. As
+variantes MQTT e Bluetooth (BLE) citadas nos scripts da Pi não fazem mais
+parte do firmware ativo neste repositório.
 
 ---
 
@@ -369,11 +385,11 @@ túnel, troque o **Public Hostname** de `http://<IP_da_ESP32>:80` para
 | Upload trava em `Connecting...` | Segure **BOOT**, toque **RESET**, solte BOOT durante a gravação |
 | S3 reinicia em loop após gravar | PSRAM errado — na S3-N16R8 use **OPI PSRAM** e Flash 16MB |
 | Serial Monitor vazio (S3) | Ative **USB CDC On Boot = Enabled** e regrave |
-| Não conecta no Wi-Fi | SSID/senha corretos? Rede é **2.4 GHz**? (ESP32 não usa 5 GHz) |
-| Relé aciona invertido (liga quando devia desligar) | Módulo ativo-baixo: troque `LED_ATIVO_ALTO`/`RELE_ATIVO_ALTO` para `false` |
+| Não conecta em nenhuma rede | `credenciais.h` existe e está preenchido (copiado do `.example`)? Rede é **2.4 GHz**? (ESP32 não usa 5 GHz) |
+| Conecta na rede errada / demora muito | O firmware escaneia e prioriza a UnB Wireless; se as duas redes estiverem no ar e você quiser forçar a residencial, afaste-se do alcance da UnB ou ajuste `conectarWifi()` no `.ino` |
+| Relé aciona invertido (liga quando devia desligar) | Módulo ativo-baixo: troque `RELAY_ATIVO_LOW` para `false` no `.ino` |
 | Relé não aciona com 3,3V | Alguns módulos pedem 5V no sinal: alimente o **+** com 5V; persiste → use módulo com optoacoplador ou transistor no sinal |
 | Lâmpada não acende, relé clica | Confira a carga: +12V→COM, NO→lâmpada(+), lâmpada(−)→GND da fonte; teste a fonte com multímetro |
-| `http://lampada.local` não abre no Android | Alguns Androids não resolvem mDNS: use o IP direto (faça reserva de DHCP) |
 
 ### Raspberry Pi / Tunnel
 
