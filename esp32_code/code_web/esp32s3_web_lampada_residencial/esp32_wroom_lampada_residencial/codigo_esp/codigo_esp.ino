@@ -37,15 +37,22 @@ const char* TOPIC_TEMPO_TOTAL   = "mbrlamp/lampada/tempo_total_s";  // publica: 
 const char* TOPIC_UMIDADE       = "mbrlamp/ambiente/umidade";       // publica: % umidade relativa
 const char* TOPIC_TEMPERATURA   = "mbrlamp/ambiente/temperatura";   // publica: °C
 
+// Tópico do pipeline de CEP (assinado por raspberry_code/cep_agent/ingest.py).
+// Deve bater com MQTT_TOPICO_SENSOR do .env do cep_agent na Pi.
+const char* TOPIC_SENSOR_CEP    = "jmorais/esp32s3/sensor/leitura";
+
 // ================== CONFIGURAÇÃO DO DHT11 ==================
-#define DHTPIN 18   // <-- AJUSTE AQUI para o GPIO real usado no seu circuito
+#define DHTPIN 21   // <-- AJUSTE AQUI para o GPIO real usado no seu circuito
 #define DHTTYPE DHT11
 DHT dht(DHTPIN, DHTTYPE);
 
 float ultimaUmidade = NAN;
 float ultimaTemperatura = NAN;
 unsigned long ultimaLeituraDHT = 0;
-const unsigned long INTERVALO_DHT_MS = 5UL * 60UL * 1000UL; // 5 minutos
+// 30s: cadência usada pelo pipeline de CEP (com XR_SUBGRUPO_N=5 no .env da Pi,
+// cada 5 leituras vira 1 ponto na carta X̄-R, ~2,5 min por ponto). Ajuste aqui
+// se quiser outra cadência — não precisa mexer no .env da Pi pra isso.
+const unsigned long INTERVALO_DHT_MS = 30UL * 1000UL;
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
@@ -107,6 +114,11 @@ void lerEPublicarDHT() {
 
   mqttClient.publish(TOPIC_UMIDADE, String(umidade, 1).c_str(), true);
   mqttClient.publish(TOPIC_TEMPERATURA, String(temperatura, 1).c_str(), true);
+
+  // Alimenta o pipeline de CEP na Pi (ingest.py) com a mesma leitura de
+  // temperatura, no formato JSON que ele espera.
+  String payloadCep = "{\"valor\":" + String(temperatura, 2) + "}";
+  mqttClient.publish(TOPIC_SENSOR_CEP, payloadCep.c_str());
 }
 
 // ================== PÁGINA WEB (UI renovada) ==================
