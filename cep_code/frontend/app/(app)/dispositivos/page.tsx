@@ -13,6 +13,7 @@ export default function DispositivosPage() {
     canal: CANAL_LAMPADA,
     replayN: 20,
   });
+  const [refreshRelatorios, setRefreshRelatorios] = useState(0);
 
   const sessoes = [...buffer]
     .filter((m) => m.chart === "imr" && m.canal === CANAL_LAMPADA)
@@ -77,9 +78,12 @@ export default function DispositivosPage() {
           <h2 className="text-[15px] font-semibold tracking-tight text-fg">
             Relatórios
           </h2>
-          <GerarRelatorioButton canal={CANAL_LAMPADA} />
+          <GerarRelatorioButton
+            canal={CANAL_LAMPADA}
+            onGerado={() => setRefreshRelatorios((n) => n + 1)}
+          />
         </div>
-        <RelatoriosPeriodicos canal={CANAL_LAMPADA} />
+        <RelatoriosPeriodicos canal={CANAL_LAMPADA} refreshSignal={refreshRelatorios} />
       </div>
     </section>
   );
@@ -186,7 +190,13 @@ function LampadaStatusCard({
   );
 }
 
-function GerarRelatorioButton({ canal }: { canal: string }) {
+function GerarRelatorioButton({
+  canal,
+  onGerado,
+}: {
+  canal: string;
+  onGerado: () => void;
+}) {
   const [estado, setEstado] = useState<"idle" | "gerando" | "ok" | "erro">("idle");
   const [mensagem, setMensagem] = useState<string | null>(null);
 
@@ -204,7 +214,8 @@ function GerarRelatorioButton({ canal }: { canal: string }) {
         throw new Error(corpo.error ?? corpo.detail ?? `HTTP ${res.status}`);
       }
       setEstado("ok");
-      setMensagem("Relatório gerado — atualize a lista abaixo em alguns segundos.");
+      setMensagem("Relatório gerado.");
+      onGerado();
     } catch (e) {
       setEstado("erro");
       setMensagem(e instanceof Error ? e.message : "falha ao gerar relatório");

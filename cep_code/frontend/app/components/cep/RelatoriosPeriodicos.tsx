@@ -85,7 +85,13 @@ function IndicadoresBloco({ dados }: { dados: Record<string, unknown> }) {
   );
 }
 
-function PainelRelatorio({ tipo, canal }: { tipo: TipoPeriodico; canal: string }) {
+function PainelRelatorio({
+  tipo,
+  canal,
+}: {
+  tipo: TipoPeriodico;
+  canal: string;
+}) {
   const { carregando, erro, relatorio, buscar } = useRelatoriosPeriodicos(canal);
 
   useEffect(() => {
@@ -157,7 +163,14 @@ function PainelRelatorio({ tipo, canal }: { tipo: TipoPeriodico; canal: string }
   );
 }
 
-export default function RelatoriosPeriodicos({ canal = "default" }: { canal?: string }) {
+export default function RelatoriosPeriodicos({
+  canal = "default",
+  refreshSignal = 0,
+}: {
+  canal?: string;
+  /** Incremente pra forçar recarregar o relatório atual (ex.: depois de um "gerar agora"). */
+  refreshSignal?: number;
+}) {
   const [tipo, setTipo] = useState<TipoPeriodico>("diario");
 
   return (
@@ -178,7 +191,7 @@ export default function RelatoriosPeriodicos({ canal = "default" }: { canal?: st
         ))}
       </div>
 
-      <PainelRelatorio key={`${canal}-${tipo}`} tipo={tipo} canal={canal} />
+      <PainelRelatorio key={`${canal}-${tipo}-${refreshSignal}`} tipo={tipo} canal={canal} />
     </div>
   );
 }
