@@ -150,23 +150,44 @@ def _plot_imr(d: dict) -> plt.Figure:
 
 # ── PDF do dia ────────────────────────────────────────────────────────
 
+# fpdf2 com fonte core (Arial/Helvetica) só suporta latin-1. Textos vindos
+# de JSON/answer_set podem trazer tipografia "smart" (em/en dash, aspas
+# curvas, reticências) que quebra o encode — normaliza pro equivalente
+# ASCII antes de qualquer pdf.cell/multi_cell.
+_PDF_UNSUPPORTED = str.maketrans({
+    "—": "-",   # —
+    "–": "-",   # –
+    "‘": "'",   # '
+    "’": "'",   # '
+    "“": '"',   # "
+    "”": '"',   # "
+    "…": "...", # …
+    "•": "-",   # •
+})
+
+
+def _pdf_safe(texto: str) -> str:
+    texto = texto.translate(_PDF_UNSUPPORTED)
+    return texto.encode("latin-1", errors="replace").decode("latin-1")
+
+
 def _gerar_pdf(data: str, answer_set: dict, charts_b64: dict[str, str]) -> bytes:
     from fpdf import FPDF
 
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(190, 10, f"Relatorio CEP Diario — {data}", ln=True, align="C")
+    pdf.cell(190, 10, _pdf_safe(f"Relatorio CEP Diario - {data}"), ln=True, align="C")
     pdf.ln(4)
 
     for chart, resp in answer_set.items():
         if chart == "atributos":
             continue
         pdf.set_font("Arial", "B", 12)
-        pdf.cell(190, 8, f"Carta {chart}", ln=True)
+        pdf.cell(190, 8, _pdf_safe(f"Carta {chart}"), ln=True)
         pdf.set_font("Arial", "", 9)
         texto = json.dumps(resp, indent=2, ensure_ascii=False)
-        pdf.multi_cell(190, 4, texto[:1000])  # trunca para caber
+        pdf.multi_cell(190, 4, _pdf_safe(texto[:1000]))  # trunca para caber
         pdf.ln(3)
         if chart in charts_b64:
             img_bytes = base64.b64decode(charts_b64[chart])
