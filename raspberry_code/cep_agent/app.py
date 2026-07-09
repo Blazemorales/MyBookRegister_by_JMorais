@@ -17,10 +17,10 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from config import AGENT_PORT, INGEST_ENABLED, SCHEDULER_ENABLED
+from config import AGENT_PORT, INGEST_ENABLED, RPI_DEVICE_TOKEN, SCHEDULER_ENABLED
 from scheduler import criar_scheduler
 
 logger = logging.getLogger(__name__)
@@ -72,9 +72,20 @@ def health():
     return {"ok": True, "scheduler_enabled": True, "scheduled_jobs": jobs}
 
 
+def _checar_token(x_rpi_token: str | None) -> None:
+    """Exige o mesmo RPI_DEVICE_TOKEN do .env — estes endpoints passam a
+    ser alcançáveis publicamente via nginx/túnel, não só localhost."""
+    if not x_rpi_token or x_rpi_token != RPI_DEVICE_TOKEN:
+        raise HTTPException(status_code=401, detail="X-RPI-Token inválido ou ausente")
+
+
 @app.post("/run/diario")
-async def run_diario(data: str | None = Query(None, description="YYYY-MM-DD; padrão: ontem")):
+async def run_diario(
+    data: str | None = Query(None, description="YYYY-MM-DD; padrão: ontem"),
+    x_rpi_token: str | None = Header(None),
+):
     """Dispara o job diário manualmente."""
+    _checar_token(x_rpi_token)
     from jobs.diario import run_diario as _run
     ok = await _run(data_brt=data)
     if not ok:
@@ -83,8 +94,12 @@ async def run_diario(data: str | None = Query(None, description="YYYY-MM-DD; pad
 
 
 @app.post("/run/mensal")
-async def run_mensal(mes: str | None = Query(None, description="YYYY-MM; padrão: mês anterior")):
+async def run_mensal(
+    mes: str | None = Query(None, description="YYYY-MM; padrão: mês anterior"),
+    x_rpi_token: str | None = Header(None),
+):
     """Dispara o job mensal manualmente."""
+    _checar_token(x_rpi_token)
     from jobs.mensal import run_mensal as _run
     ok = await _run(mes_brt=mes)
     if not ok:

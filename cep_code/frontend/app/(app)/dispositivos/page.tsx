@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRelatorioStream, type Medicao } from "@/hooks/useRelatorioStream";
 import RelatoriosPeriodicos from "@/app/components/cep/RelatoriosPeriodicos";
+import TemperaturaAoVivo from "@/app/components/cep/TemperaturaAoVivo";
 
 const CANAL_LAMPADA = "lampada";
 
@@ -48,6 +49,10 @@ export default function DispositivosPage() {
         <LampadaStatusCard aceso={deviceStatus?.aceso ?? null} desde={deviceStatus?.received_at ?? null} />
       </div>
 
+      <div className="mb-8">
+        <TemperaturaAoVivo />
+      </div>
+
       <div className="bg-surface border border-line rounded-3xl shadow-sm overflow-hidden mb-8">
         <div className="px-6 py-4 border-b border-line">
           <h2 className="text-[15px] font-semibold tracking-tight text-fg">
@@ -68,10 +73,11 @@ export default function DispositivosPage() {
       </div>
 
       <div className="bg-surface border border-line rounded-3xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-line">
+        <div className="px-6 py-4 border-b border-line flex items-center justify-between gap-4">
           <h2 className="text-[15px] font-semibold tracking-tight text-fg">
             Relatórios
           </h2>
+          <GerarRelatorioButton />
         </div>
         <RelatoriosPeriodicos canal={CANAL_LAMPADA} />
       </div>
@@ -87,6 +93,8 @@ function LampadaStatusCard({
   desde: string | null;
 }) {
   const [agora, setAgora] = useState(() => Date.now());
+  const [pendente, setPendente] = useState<"on" | "off" | null>(null);
+  const [erroControle, setErroControle] = useState<string | null>(null);
 
   useEffect(() => {
     if (!aceso) return;
@@ -94,30 +102,121 @@ function LampadaStatusCard({
     return () => clearInterval(id);
   }, [aceso]);
 
+  // Estado otimista: o clique já muda o botão/badge na hora, mas quem
+  // confirma de verdade é o próximo `device_status` via Socket.IO — se a
+  // ESP32 não responder, isso volta a refletir o estado real assim que
+  // o próximo evento chegar.
+  const [acesoOtimista, setAcesoOtimista] = useState<boolean | null>(null);
+  useEffect(() => setAcesoOtimista(null), [aceso]);
+  const acesoExibido = acesoOtimista ?? aceso;
+
   const elapsed =
-    aceso && desde ? Math.max(0, Math.floor((agora - new Date(desde).getTime()) / 1000)) : null;
+    acesoExibido && desde
+      ? Math.max(0, Math.floor((agora - new Date(desde).getTime()) / 1000))
+      : null;
+
+  async function acionar(acao: "on" | "off") {
+    setPendente(acao);
+    setErroControle(null);
+    try {
+      const res = await fetch(`/api/lampada/${acao}`, { method: "POST" });
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => ({}) as { error?: string });
+        throw new Error(corpo.error ?? `HTTP ${res.status}`);
+      }
+      setAcesoOtimista(acao === "on");
+    } catch (e) {
+      setErroControle(e instanceof Error ? e.message : "falha ao acionar a lâmpada");
+    } finally {
+      setPendente(null);
+    }
+  }
 
   return (
-    <div className="bg-surface border border-line rounded-3xl shadow-sm p-6 flex items-center gap-4">
-      <span
-        className={`h-3 w-3 rounded-full ${
-          aceso === null
-            ? "bg-zinc-400"
-            : aceso
-              ? "bg-emerald-500 animate-pulse"
-              : "bg-zinc-400"
-        }`}
-      />
-      <div>
-        <p className="text-[13px] uppercase tracking-wide text-fg-muted">Lâmpada</p>
-        <p className="text-xl font-semibold text-fg">
-          {aceso === null
-            ? "Estado desconhecido — aguardando o dispositivo"
-            : aceso
-              ? `Ligada há ${formatarDuracao(elapsed ?? 0)}`
-              : "Apagada"}
-        </p>
+    <div className="bg-surface border border-line rounded-3xl shadow-sm p-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <span
+            className={`h-3 w-3 rounded-full ${
+              acesoExibido === null
+                ? "bg-zinc-400"
+                : acesoExibido
+                  ? "bg-emerald-500 animate-pulse"
+                  : "bg-zinc-400"
+            }`}
+          />
+          <div>
+            <p className="text-[13px] uppercase tracking-wide text-fg-muted">Lâmpada</p>
+            <p className="text-xl font-semibold text-fg">
+              {acesoExibido === null
+                ? "Estado desconhecido — aguardando o dispositivo"
+                : acesoExibido
+                  ? `Ligada há ${formatarDuracao(elapsed ?? 0)}`
+                  : "Apagada"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => acionar("on")}
+            disabled={pendente !== null}
+            className="rounded-full bg-accent text-white px-4 py-2 text-[13px] font-medium disabled:opacity-50 hover:bg-accent-hover transition-colors"
+          >
+            {pendente === "on" ? "Ligando…" : "Ligar"}
+          </button>
+          <button
+            onClick={() => acionar("off")}
+            disabled={pendente !== null}
+            className="rounded-full border border-line px-4 py-2 text-[13px] font-medium text-fg disabled:opacity-50 hover:bg-surface-alt transition-colors"
+          >
+            {pendente === "off" ? "Desligando…" : "Desligar"}
+          </button>
+        </div>
       </div>
+
+      {erroControle && (
+        <p className="mt-3 text-[13px] text-red-400">{erroControle}</p>
+      )}
+    </div>
+  );
+}
+
+function GerarRelatorioButton() {
+  const [estado, setEstado] = useState<"idle" | "gerando" | "ok" | "erro">("idle");
+  const [mensagem, setMensagem] = useState<string | null>(null);
+
+  async function gerar() {
+    setEstado("gerando");
+    setMensagem(null);
+    try {
+      const res = await fetch("/api/lampada-relatorio", { method: "POST" });
+      const corpo = await res.json().catch(() => ({}) as { error?: string; detail?: string });
+      if (!res.ok) {
+        throw new Error(corpo.error ?? corpo.detail ?? `HTTP ${res.status}`);
+      }
+      setEstado("ok");
+      setMensagem("Relatório gerado — atualize a lista abaixo em alguns segundos.");
+    } catch (e) {
+      setEstado("erro");
+      setMensagem(e instanceof Error ? e.message : "falha ao gerar relatório");
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={gerar}
+        disabled={estado === "gerando"}
+        className="rounded-full border border-line px-4 py-1.5 text-[12px] font-medium text-fg disabled:opacity-50 hover:bg-surface-alt transition-colors whitespace-nowrap"
+      >
+        {estado === "gerando" ? "Gerando…" : "Gerar relatório agora"}
+      </button>
+      {mensagem && (
+        <span className={`text-[12px] ${estado === "erro" ? "text-red-400" : "text-fg-muted"}`}>
+          {mensagem}
+        </span>
+      )}
     </div>
   );
 }

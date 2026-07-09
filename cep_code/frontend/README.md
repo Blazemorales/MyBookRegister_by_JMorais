@@ -29,11 +29,14 @@ Acesse <http://localhost:3000>.
 
 | Nome | Onde | Para que |
 |------|------|----------|
-| `CEP_API_URL` | server-side | URL do backend (rotas `/api/*` fazem proxy). |
+| `CEP_API_URL` | server-side | URL do backend (rotas `/api/*` fazem proxy). Ex.: `https://tpe-backend-dir2.onrender.com` — **nunca** o domínio da Raspberry Pi, que só serve a lâmpada/stats. |
 | `NEXT_PUBLIC_CEP_API_URL` | client (legado) | Mantido apenas para tipos/helpers. |
+| `NEXT_PUBLIC_SOCKET_URL` | client | URL do servidor Socket.IO (mesmo host do `CEP_API_URL`) — sem isso o app tenta `ws://localhost:8000` em produção e as abas "Ao vivo"/"Meus dispositivos" ficam sem dados em tempo real. |
 | `AUTH_SECRET` | server-side | Segredo HMAC para assinar a sessão. Gere com `openssl rand -hex 32`. |
 | `UPSTASH_REDIS_REST_URL` | server-side (opcional) | Habilita rate limit distribuído de login. |
 | `UPSTASH_REDIS_REST_TOKEN` | server-side (opcional) | Token do Upstash. |
+| `RASPBERRY_LAMPADA_URL` | server-side (opcional) | URL pública da Raspberry Pi (nginx + Cloudflare Tunnel). Default: `https://raspberry.mbrlamp.com.br`. Usada pelos botões Ligar/Desligar em "Meus dispositivos". |
+| `RASPBERRY_CEP_AGENT_TOKEN` | server-side | Mesmo valor do `RPI_DEVICE_TOKEN` configurado no `.env` do `cep-agent` na Pi — exigido pelo botão "Gerar relatório agora" (`POST /cep-agent/run/diario`). |
 
 Sem `AUTH_SECRET` o app redireciona tudo para `/acesso-negado`.
 Sem `UPSTASH_REDIS_*` o rate limit cai para in-memory (por instância).
