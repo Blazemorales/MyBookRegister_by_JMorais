@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+from datetime import date as _date
 from pathlib import Path
 from typing import Any, Optional
 
@@ -356,8 +357,9 @@ class AsyncDBUserManager:
               AND received_at <  (($2::date + INTERVAL '1 day') AT TIME ZONE 'America/Sao_Paulo')
             ORDER BY received_at
         """
+        data = _date.fromisoformat(data_brt)
         async with self.pool.acquire() as conn:
-            rows = await conn.fetch(sql, canal, data_brt)
+            rows = await conn.fetch(sql, canal, data)
         resultado = []
         for r in rows:
             p = r["payload"]
@@ -388,8 +390,10 @@ class AsyncDBUserManager:
               AND received_at <  (($3::date + INTERVAL '1 day') AT TIME ZONE 'America/Sao_Paulo')
             ORDER BY received_at
         """
+        inicio = _date.fromisoformat(inicio_brt)
+        fim = _date.fromisoformat(fim_brt)
         async with self.pool.acquire() as conn:
-            rows = await conn.fetch(sql, canal, inicio_brt, fim_brt)
+            rows = await conn.fetch(sql, canal, inicio, fim)
         resultado = []
         for r in rows:
             p = r["payload"]
