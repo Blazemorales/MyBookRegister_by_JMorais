@@ -82,15 +82,16 @@ def _checar_token(x_rpi_token: str | None) -> None:
 @app.post("/run/diario")
 async def run_diario(
     data: str | None = Query(None, description="YYYY-MM-DD; padrão: ontem"),
+    canal: str | None = Query(None, description="canal a consolidar; padrão: CANAL do .env"),
     x_rpi_token: str | None = Header(None),
 ):
     """Dispara o job diário manualmente."""
     _checar_token(x_rpi_token)
     from jobs.diario import run_diario as _run
-    ok = await _run(data_brt=data)
+    ok = await _run(data_brt=data, canal=canal)
     if not ok:
         raise HTTPException(status_code=500, detail="Job diário falhou — veja o log")
-    return {"ok": True, "data": data}
+    return {"ok": True, "data": data, "canal": canal}
 
 
 @app.post("/run/mensal")

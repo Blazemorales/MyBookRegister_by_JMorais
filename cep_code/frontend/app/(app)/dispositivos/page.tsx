@@ -77,7 +77,7 @@ export default function DispositivosPage() {
           <h2 className="text-[15px] font-semibold tracking-tight text-fg">
             Relatórios
           </h2>
-          <GerarRelatorioButton />
+          <GerarRelatorioButton canal={CANAL_LAMPADA} />
         </div>
         <RelatoriosPeriodicos canal={CANAL_LAMPADA} />
       </div>
@@ -186,7 +186,7 @@ function LampadaStatusCard({
   );
 }
 
-function GerarRelatorioButton() {
+function GerarRelatorioButton({ canal }: { canal: string }) {
   const [estado, setEstado] = useState<"idle" | "gerando" | "ok" | "erro">("idle");
   const [mensagem, setMensagem] = useState<string | null>(null);
 
@@ -194,7 +194,11 @@ function GerarRelatorioButton() {
     setEstado("gerando");
     setMensagem(null);
     try {
-      const res = await fetch("/api/lampada-relatorio", { method: "POST" });
+      const res = await fetch("/api/lampada-relatorio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canal }),
+      });
       const corpo = await res.json().catch(() => ({}) as { error?: string; detail?: string });
       if (!res.ok) {
         throw new Error(corpo.error ?? corpo.detail ?? `HTTP ${res.status}`);

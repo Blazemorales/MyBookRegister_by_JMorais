@@ -61,10 +61,10 @@ async def _obter_jwt(client: httpx.AsyncClient) -> str:
 
 # ── Busca de pontos ───────────────────────────────────────────────────
 
-async def _buscar_pontos_dia(client: httpx.AsyncClient, jwt: str, data: str) -> list[dict]:
+async def _buscar_pontos_dia(client: httpx.AsyncClient, jwt: str, data: str, canal: str) -> list[dict]:
     r = await client.get(
         f"{BACKEND_URL}/stream/diario",
-        params={"data": data, "canal": CANAL},
+        params={"data": data, "canal": canal},
         headers={"Authorization": f"Bearer {jwt}"},
         timeout=30.0,
     )
@@ -203,13 +203,13 @@ def _gerar_pdf(data: str, answer_set: dict, charts_b64: dict[str, str]) -> bytes
 # ── Publicação no backend ─────────────────────────────────────────────
 
 async def _publicar(client: httpx.AsyncClient, jwt: str, data: str,
-                    dados: dict, charts: dict, pdf: bytes) -> None:
+                    dados: dict, charts: dict, pdf: bytes, canal: str) -> None:
     headers = {"Authorization": f"Bearer {jwt}"}
     r = await client.post(
         f"{BACKEND_URL}/relatorios/diario",
         json={
             "periodo": data,
-            "canal": CANAL,
+            "canal": canal,
             "dados": dados,
             "charts": charts,
             "pdf_b64": base64.b64encode(pdf).decode("ascii") if pdf else None,
@@ -223,16 +223,21 @@ async def _publicar(client: httpx.AsyncClient, jwt: str, data: str,
 
 # ── Cache local SQLite ────────────────────────────────────────────────
 
-def _salvar_local(data: str, dados: dict, pdf: bytes) -> None:
+def _salvar_local(data: str, dados: dict, pdf: bytes, canal: str = CANAL) -> None:
     con = sqlite3.connect(_DB_PATH)
     con.execute(
         """CREATE TABLE IF NOT EXISTS relatorios_diarios
            (periodo TEXT PRIMARY KEY, dados TEXT, pdf BLOB, gerado_em TEXT)"""
     )
     from datetime import datetime, timezone
+    # Namespacing simples pra não colidir cache local entre canais no
+    # mesmo dia (a chave primária da tabela é só `periodo`) — o canal
+    # default fica sem prefixo por compatibilidade com quem já lê
+    # /reports/diario/latest esperando o relatório de temperatura.
+    chave = data if canal == CANAL else f"{data}:{canal}"
     con.execute(
         "INSERT OR REPLACE INTO relatorios_diarios VALUES (?,?,?,?)",
-        (data, json.dumps(dados), pdf, datetime.now(timezone.utc).isoformat()),
+        (chave, json.dumps(dados), pdf, datetime.now(timezone.utc).isoformat()),
     )
     con.commit()
     con.close()
@@ -240,10 +245,13 @@ def _salvar_local(data: str, dados: dict, pdf: bytes) -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────
 
-async def run_diario(data_brt: Optional[str] = None) -> bool:
-    """Gera e publica o relatório do dia `data_brt` (YYYY-MM-DD).
+async def run_diario(data_brt: Optional[str] = None, canal: Optional[str] = None) -> bool:
+    """Gera e publica o relatório do dia `data_brt` (YYYY-MM-DD) para `canal`.
 
-    Se `data_brt` for None, usa ontem (em BRT).
+    Se `data_brt` for None, usa ontem (em BRT). Se `canal` for None, usa
+    o canal padrão configurado (`CANAL` — normalmente a temperatura).
+    Passe `canal="lampada"` (== `CANAL_LAMPADA`) para o relatório de
+    sessões de uso da lâmpada em vez do de temperatura.
     Retorna True em caso de sucesso.
     """
     if data_brt is None:
@@ -253,7 +261,10 @@ async def run_diario(data_brt: Optional[str] = None) -> bool:
         ontem = (datetime.now(tz) - timedelta(days=1)).date()
         data_brt = ontem.isoformat()
 
-    logger.info("[diario] iniciando job para %s", data_brt)
+    if canal is None:
+        canal = CANAL
+
+    logger.info("[diario] iniciando job para %s (canal=%s)", data_brt, canal)
 
     transport = httpx.AsyncHTTPTransport(retries=3)
     async with httpx.AsyncClient(transport=transport) as client:
@@ -264,17 +275,17 @@ async def run_diario(data_brt: Optional[str] = None) -> bool:
             return False
 
         try:
-            pontos = await _buscar_pontos_dia(client, jwt, data_brt)
+            pontos = await _buscar_pontos_dia(client, jwt, data_brt, canal)
         except Exception as exc:
             logger.error("[diario] falha ao buscar pontos: %s", exc)
             return False
 
-    logger.info("[diario] %d ponto(s) recebidos para %s", len(pontos), data_brt)
+    logger.info("[diario] %d ponto(s) recebidos para %s (canal=%s)", len(pontos), data_brt, canal)
 
     if not pontos:
-        logger.warning("[diario] nenhum ponto para %s — relatório vazio", data_brt)
+        logger.warning("[diario] nenhum ponto para %s (canal=%s) — relatório vazio", data_brt, canal)
         dados_vazio = {"aviso": "sem dados no período", "periodo": data_brt}
-        _salvar_local(data_brt, dados_vazio, b"")
+        _salvar_local(data_brt, dados_vazio, b"", canal)
         return True
 
     datasets = _pontos_para_datasets(pontos)
@@ -292,14 +303,14 @@ async def run_diario(data_brt: Optional[str] = None) -> bool:
     charts_b64 = _gerar_charts_b64(processor.dados_tratados)
     pdf_bytes = _gerar_pdf(data_brt, answer_set, charts_b64)
 
-    _salvar_local(data_brt, answer_set, pdf_bytes)
+    _salvar_local(data_brt, answer_set, pdf_bytes, canal)
 
     transport = httpx.AsyncHTTPTransport(retries=3)
     async with httpx.AsyncClient(transport=transport) as client:
         try:
             jwt = await _obter_jwt(client)
-            await _publicar(client, jwt, data_brt, answer_set, charts_b64, pdf_bytes)
-            logger.info("[diario] relatório %s publicado com sucesso", data_brt)
+            await _publicar(client, jwt, data_brt, answer_set, charts_b64, pdf_bytes, canal)
+            logger.info("[diario] relatório %s (canal=%s) publicado com sucesso", data_brt, canal)
             return True
         except Exception as exc:
             logger.error("[diario] falha ao publicar: %s", exc)

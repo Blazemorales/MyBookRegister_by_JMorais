@@ -28,12 +28,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
 
-  const body = await req.json().catch(() => ({}) as { data?: string });
+  const body = await req.json().catch(() => ({}) as { data?: string; canal?: string });
   const data = body.data ?? hojeBRT();
+  const params = new URLSearchParams({ data });
+  if (body.canal) params.set("canal", body.canal);
 
   try {
     const res = await fetch(
-      `${raspberryBaseUrl()}/cep-agent/run/diario?data=${encodeURIComponent(data)}`,
+      `${raspberryBaseUrl()}/cep-agent/run/diario?${params.toString()}`,
       {
         method: "POST",
         headers: { "X-RPI-Token": token },
