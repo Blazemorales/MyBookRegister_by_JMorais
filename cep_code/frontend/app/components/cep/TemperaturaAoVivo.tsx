@@ -166,7 +166,10 @@ export default function TemperaturaAoVivo() {
                   fontSize: 12,
                   color: "var(--fg)",
                 }}
-                formatter={(value: number) => [`${value.toFixed(1)}°C`, "Temperatura"]}
+                formatter={(value) => {
+                  const n = typeof value === "number" ? value : Number(value);
+                  return [`${Number.isFinite(n) ? n.toFixed(1) : value}°C`, "Temperatura"];
+                }}
               />
               {limites && (
                 <>
