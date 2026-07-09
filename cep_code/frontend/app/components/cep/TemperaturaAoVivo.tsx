@@ -3,8 +3,10 @@
 import { useMemo } from "react";
 import {
   CartesianGrid,
+  Label,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -13,6 +15,32 @@ import {
 import { useRelatorioStream } from "@/hooks/useRelatorioStream";
 
 const CANAL_TEMPERATURA = "default";
+
+// d2 pra n=2 (par usado na amplitude móvel) — mesma tabela de constantes
+// de cep_code/backend/CEP/constantes.py, linha n=2: (A2, D3, D4, d2).
+const D2_N2 = 1.128;
+const MINIMO_PONTOS_LIMITES = 5;
+
+interface LimitesIMR {
+  mediaInd: number;
+  lscInd: number;
+  licInd: number;
+}
+
+/** Carta I (Individuals): sigma estimado pela amplitude móvel, LSC/LIC = média ± 3σ.
+ * Mesma fórmula de processar_tipo_imr em cep_code/backend/CEP/amostras/data_processor.py. */
+function calcularLimitesIMR(valores: number[]): LimitesIMR | null {
+  if (valores.length < MINIMO_PONTOS_LIMITES) return null;
+  const mediaInd = valores.reduce((a, b) => a + b, 0) / valores.length;
+  const amplitudes = valores.slice(1).map((v, i) => Math.abs(v - valores[i]));
+  const amBar = amplitudes.reduce((a, b) => a + b, 0) / amplitudes.length;
+  const sigmaInd = amBar / D2_N2;
+  return {
+    mediaInd,
+    lscInd: mediaInd + 3 * sigmaInd,
+    licInd: mediaInd - 3 * sigmaInd,
+  };
+}
 
 function formatHora(iso: string): string {
   try {
@@ -45,7 +73,16 @@ export default function TemperaturaAoVivo() {
     [buffer],
   );
 
+  const limites = useMemo(
+    () => calcularLimitesIMR(pontos.map((p) => p.valor)),
+    [pontos],
+  );
+
   const ultimo = pontos.length > 0 ? pontos[pontos.length - 1] : null;
+  const foraDeControle =
+    limites && ultimo
+      ? ultimo.valor > limites.lscInd || ultimo.valor < limites.licInd
+      : false;
 
   return (
     <div className="bg-surface border border-line rounded-3xl shadow-sm overflow-hidden">
@@ -81,11 +118,19 @@ export default function TemperaturaAoVivo() {
       )}
 
       <div className="px-6 pt-5">
-        <div className="text-4xl font-semibold tracking-tight text-fg">
+        <div className={`text-4xl font-semibold tracking-tight ${foraDeControle ? "text-red-400" : "text-fg"}`}>
           {ultimo ? `${ultimo.valor.toFixed(1)}°C` : "—"}
         </div>
         {ultimo && (
-          <p className="mt-1 text-[13px] text-fg-muted">última leitura às {ultimo.hora}</p>
+          <p className="mt-1 text-[13px] text-fg-muted">
+            última leitura às {ultimo.hora}
+            {foraDeControle && " — fora dos limites de controle (Carta I)"}
+          </p>
+        )}
+        {limites && (
+          <p className="mt-0.5 text-[12px] text-fg-muted font-mono">
+            LC {limites.mediaInd.toFixed(2)}°C · LSC {limites.lscInd.toFixed(2)}°C · LIC {limites.licInd.toFixed(2)}°C
+          </p>
         )}
       </div>
 
@@ -123,6 +168,19 @@ export default function TemperaturaAoVivo() {
                 }}
                 formatter={(value: number) => [`${value.toFixed(1)}°C`, "Temperatura"]}
               />
+              {limites && (
+                <>
+                  <ReferenceLine y={limites.mediaInd} stroke="var(--fg-muted)" strokeDasharray="2 2">
+                    <Label value="LC" position="right" fill="var(--fg-muted)" fontSize={11} />
+                  </ReferenceLine>
+                  <ReferenceLine y={limites.lscInd} stroke="var(--danger)" strokeDasharray="4 4">
+                    <Label value="LSC" position="right" fill="var(--danger)" fontSize={11} />
+                  </ReferenceLine>
+                  <ReferenceLine y={limites.licInd} stroke="var(--danger)" strokeDasharray="4 4">
+                    <Label value="LIC" position="right" fill="var(--danger)" fontSize={11} />
+                  </ReferenceLine>
+                </>
+              )}
               <Line
                 type="monotone"
                 dataKey="valor"
