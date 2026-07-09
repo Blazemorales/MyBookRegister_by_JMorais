@@ -118,10 +118,12 @@ export function useRelatorioStream(
       if (cancelado) return;
 
       const socket = io(url, {
-        transports: ["websocket"],
+        // Sem forçar "websocket": no Render o upgrade de WS falha (proxy
+        // não repassa a conexão), mas o fallback padrão pra polling HTTP
+        // funciona bem — forçar só websocket travava em timeout sempre.
         auth: { role: "frontend", token },
         reconnection: true,
-        reconnectionAttempts: 0,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
       });
