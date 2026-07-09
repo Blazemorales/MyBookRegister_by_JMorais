@@ -207,7 +207,13 @@ async def _publicar(client: httpx.AsyncClient, jwt: str, data: str,
     headers = {"Authorization": f"Bearer {jwt}"}
     r = await client.post(
         f"{BACKEND_URL}/relatorios/diario",
-        json={"periodo": data, "canal": CANAL, "dados": dados, "charts": charts},
+        json={
+            "periodo": data,
+            "canal": CANAL,
+            "dados": dados,
+            "charts": charts,
+            "pdf_b64": base64.b64encode(pdf).decode("ascii") if pdf else None,
+        },
         headers=headers,
         timeout=30.0,
     )

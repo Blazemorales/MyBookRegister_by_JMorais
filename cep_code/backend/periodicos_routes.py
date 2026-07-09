@@ -23,7 +23,7 @@ import os
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -141,23 +141,26 @@ class RelatorioIn(BaseModel):
     canal: str = "default"
     dados: dict
     charts: Optional[dict] = None
+    pdf_b64: Optional[str] = None
 
 
 @router.post("/relatorios/{tipo}")
 async def publicar_relatorio(
     tipo: str,
     payload: RelatorioIn,
-    pdf_file: Optional[UploadFile] = File(None),
     user: dict = Depends(_get_rpi_or_user),
 ) -> JSONResponse:
     """RPi publica o resultado de um período.
 
-    O PDF pode ser enviado via multipart como campo `pdf_file`, ou omitido.
+    O PDF (se houver) vai embutido no próprio JSON como `pdf_b64` — um único
+    POST application/json, sem multipart (evita o conflito do FastAPI entre
+    um body Pydantic e um UploadFile na mesma rota).
     """
     t = _validar_tipo(tipo)
     pdf_bytes: Optional[bytes] = None
-    if pdf_file is not None:
-        pdf_bytes = await pdf_file.read() or None
+    if payload.pdf_b64:
+        import base64
+        pdf_bytes = base64.b64decode(payload.pdf_b64)
 
     db = get_db()
     try:
