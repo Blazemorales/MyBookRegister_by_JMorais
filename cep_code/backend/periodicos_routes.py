@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from auth import create_access_token, get_current_user
+from auth import create_access_token, decode_token, get_current_user, oauth2_scheme
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +71,17 @@ async def device_token(payload: DeviceTokenIn) -> dict:
     return {"access_token": jwt, "token_type": "bearer"}
 
 
-async def _get_rpi_or_user(user: dict = Depends(get_current_user)) -> dict:
-    """Aceita tanto o JWT de usuário quanto o JWT de serviço (role=rpi)."""
-    return user
+async def _get_rpi_or_user(token: str = Depends(oauth2_scheme)) -> dict:
+    """Aceita tanto o JWT de usuário quanto o JWT de serviço (role=rpi).
+
+    O JWT de serviço (sub="rpi_device") não corresponde a nenhum usuário
+    real no banco, então não pode passar pela checagem de user_id do
+    get_current_user — só o JWT de usuário humano passa por ela.
+    """
+    payload = decode_token(token)
+    if payload.get("role") == "rpi":
+        return {"username": payload.get("sub", "rpi_device"), "user_id": None, "role": "rpi"}
+    return await get_current_user(token)
 
 
 # ---------------------------------------------------------------------------

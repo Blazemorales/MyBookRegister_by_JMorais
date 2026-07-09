@@ -45,14 +45,19 @@ def set_db(mgr) -> None:
     _db = mgr
 
 
+def decode_token(token: str) -> dict:
+    """Decodifica e valida a assinatura/expiração do JWT (sem checar usuário no banco)."""
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     """Decodifica o JWT e retorna {username, user_id}."""
     if _db is None:
         raise RuntimeError("DB não inicializado para auth")
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    payload = decode_token(token)
     username = payload.get("sub")
     if not username:
         raise HTTPException(status_code=401, detail="Invalid token")

@@ -2,9 +2,10 @@
  * MyBookRegister - Controle de lâmpada 12V DC via relé Songle SRD-05VDC-SL-C
  * - Conecta automaticamente na rede UnB Wireless (WPA2-Enterprise) OU residencial (WPA2-Personal)
  * - Servidor web com UI renovada + cronômetro em tempo real
- * - Cliente MQTT (broker no Raspberry Pi via Cloudflare Tunnel, raspberry.mbrlamp.com.br)
+ * - Cliente MQTT (broker Mosquitto na Raspberry Pi, acessado pelo IP local
+ *   da rede residencial — MQTT_BROKER abaixo)
  * - Registra tempo ligada (sessão atual + acumulado persistente em NVS) e publica via MQTT
- *   para o Raspberry Pi coletar os dados (pipeline do CEP)
+ *   para a Raspberry Pi coletar os dados (pipeline do CEP)
  *
  * Bibliotecas necessárias (Library Manager):
  *   "PubSubClient" by Nick O'Leary
@@ -21,13 +22,15 @@
 #include "credenciais.h"
 
 // ================== CONFIGURAÇÃO DO RELÉ ==================
-#define RELAY_PIN 4
+#define RELAY_PIN 23
 #define RELAY_ATIVO_LOW true
 
 // ================== CONFIGURAÇÃO DO MQTT ==================
-// Broker exposto via Cloudflare Tunnel (TCP direto), sem autenticação
-const char* MQTT_BROKER    = "raspberry.mbrlamp.com.br";
-const int   MQTT_PORT      = 1883; // ajuste para 8883 se o tunnel expuser com TLS
+// Broker Mosquitto na Pi, acessado pelo IP local da rede residencial —
+// o Cloudflare Tunnel gratuito não expõe TCP cru (porta 1883) pra
+// internet, então MQTT só funciona com ESP32 e Pi na mesma LAN.
+const char* MQTT_BROKER    = "192.168.0.14";
+const int   MQTT_PORT      = 1883;
 const char* MQTT_CLIENT_ID = "esp32-mbrlamp";
 
 const char* TOPIC_COMANDO       = "mbrlamp/lampada/comando";        // assina: "ON" / "OFF"
@@ -42,7 +45,7 @@ const char* TOPIC_TEMPERATURA   = "mbrlamp/ambiente/temperatura";   // publica: 
 const char* TOPIC_SENSOR_CEP    = "jmorais/esp32s3/sensor/leitura";
 
 // ================== CONFIGURAÇÃO DO DHT11 ==================
-#define DHTPIN 21   // <-- AJUSTE AQUI para o GPIO real usado no seu circuito
+#define DHTPIN 18   // <-- AJUSTE AQUI para o GPIO real usado no seu circuito
 #define DHTTYPE DHT11
 DHT dht(DHTPIN, DHTTYPE);
 
