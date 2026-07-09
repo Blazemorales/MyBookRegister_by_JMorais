@@ -96,23 +96,26 @@ function LampadaStatusCard({
   const [pendente, setPendente] = useState<"on" | "off" | null>(null);
   const [erroControle, setErroControle] = useState<string | null>(null);
 
+  // Estado otimista: o clique já muda o botão/badge na hora (aceso + desde),
+  // mas quem confirma de verdade é o próximo `device_status` via Socket.IO —
+  // quando ele chegar, os dois efeitos abaixo descartam o otimista e passam
+  // a refletir o estado real.
+  const [acesoOtimista, setAcesoOtimista] = useState<boolean | null>(null);
+  const [desdeOtimista, setDesdeOtimista] = useState<string | null>(null);
+  useEffect(() => setAcesoOtimista(null), [aceso]);
+  useEffect(() => setDesdeOtimista(null), [desde]);
+  const acesoExibido = acesoOtimista ?? aceso;
+  const desdeExibido = desdeOtimista ?? desde;
+
   useEffect(() => {
-    if (!aceso) return;
+    if (!acesoExibido) return;
     const id = setInterval(() => setAgora(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [aceso]);
-
-  // Estado otimista: o clique já muda o botão/badge na hora, mas quem
-  // confirma de verdade é o próximo `device_status` via Socket.IO — se a
-  // ESP32 não responder, isso volta a refletir o estado real assim que
-  // o próximo evento chegar.
-  const [acesoOtimista, setAcesoOtimista] = useState<boolean | null>(null);
-  useEffect(() => setAcesoOtimista(null), [aceso]);
-  const acesoExibido = acesoOtimista ?? aceso;
+  }, [acesoExibido]);
 
   const elapsed =
-    acesoExibido && desde
-      ? Math.max(0, Math.floor((agora - new Date(desde).getTime()) / 1000))
+    acesoExibido && desdeExibido
+      ? Math.max(0, Math.floor((agora - new Date(desdeExibido).getTime()) / 1000))
       : null;
 
   async function acionar(acao: "on" | "off") {
@@ -125,6 +128,7 @@ function LampadaStatusCard({
         throw new Error(corpo.error ?? `HTTP ${res.status}`);
       }
       setAcesoOtimista(acao === "on");
+      setDesdeOtimista(new Date().toISOString());
     } catch (e) {
       setErroControle(e instanceof Error ? e.message : "falha ao acionar a lâmpada");
     } finally {

@@ -31,9 +31,11 @@ from config import (
     MQTT_PASSWORD,
     MQTT_PORT,
     MQTT_TLS,
+    MQTT_TOPICO_ESTADO_ESP32,
     MQTT_TOPICO_LAMPADA,
     MQTT_TOPICO_SENSOR,
     MQTT_TOPICO_STATUS_LAMPADA,
+    MQTT_TOPICO_TEMPO_SESSAO_ESP32,
     MQTT_USERNAME,
     P_CRITERIO_DEFEITO,
     RPI_DEVICE_TOKEN,
@@ -197,6 +199,10 @@ def _processar_leitura(valor: float):
         asyncio.run_coroutine_threadsafe(_emitir(payload_u), _loop)
 
 
+_ultima_sessao_s: float = 0.0
+_estado_anterior: Optional[bool] = None
+
+
 def _processar_leitura_lampada(duracao_s: float):
     """Sessão de lâmpada fechada (lampada_stats.py): 1 ponto individual
     na carta I-MR do canal dedicado — não entra no buffer de subgrupo do
@@ -219,9 +225,12 @@ def _on_connect_mqtt(client, userdata, flags, rc, props=None):
         client.subscribe(MQTT_TOPICO_SENSOR, qos=1)
         client.subscribe(MQTT_TOPICO_LAMPADA, qos=1)
         client.subscribe(MQTT_TOPICO_STATUS_LAMPADA, qos=1)
+        client.subscribe(MQTT_TOPICO_ESTADO_ESP32, qos=1)
+        client.subscribe(MQTT_TOPICO_TEMPO_SESSAO_ESP32, qos=1)
         logger.info(
-            "[ingest] assinando tópicos: %s, %s, %s",
+            "[ingest] assinando tópicos: %s, %s, %s, %s, %s",
             MQTT_TOPICO_SENSOR, MQTT_TOPICO_LAMPADA, MQTT_TOPICO_STATUS_LAMPADA,
+            MQTT_TOPICO_ESTADO_ESP32, MQTT_TOPICO_TEMPO_SESSAO_ESP32,
         )
     else:
         logger.error("[ingest] MQTT falhou rc=%s", rc)
@@ -239,13 +248,41 @@ def _parse_status(payload_bytes: bytes) -> Optional[bool]:
 
 
 def _on_message_mqtt(client, userdata, msg):
+    global _ultima_sessao_s, _estado_anterior
+
     if msg.topic == MQTT_TOPICO_STATUS_LAMPADA:
         aceso = _parse_status(msg.payload)
         if aceso is None:
             logger.debug("[ingest] payload de status inválido ignorado: %s", msg.payload[:80])
             return
-        logger.debug("[ingest] status lâmpada: aceso=%s", aceso)
+        logger.debug("[ingest] status lâmpada (legado): aceso=%s", aceso)
         asyncio.run_coroutine_threadsafe(_emitir_status(CANAL_LAMPADA, aceso), _loop)
+        return
+
+    if msg.topic == MQTT_TOPICO_TEMPO_SESSAO_ESP32:
+        try:
+            _ultima_sessao_s = float(msg.payload.decode("utf-8", errors="ignore").strip())
+        except ValueError:
+            pass
+        return
+
+    if msg.topic == MQTT_TOPICO_ESTADO_ESP32:
+        payload = msg.payload.decode("utf-8", errors="ignore").strip().upper()
+        if payload not in ("ON", "OFF"):
+            logger.debug("[ingest] payload de estado ESP32 inválido ignorado: %s", payload)
+            return
+        aceso = payload == "ON"
+        logger.debug("[ingest] estado ESP32: aceso=%s", aceso)
+        asyncio.run_coroutine_threadsafe(_emitir_status(CANAL_LAMPADA, aceso), _loop)
+
+        # Transição ON -> OFF: a sessão que acabou de fechar vira 1 ponto
+        # na carta I-MR do canal "lampada" (mesmo formato que
+        # lampada_stats.py produzia, mas usando o dado que a própria
+        # ESP32 já publica em MQTT_TOPICO_TEMPO_SESSAO_ESP32).
+        if _estado_anterior is True and aceso is False and _ultima_sessao_s > 0:
+            _processar_leitura_lampada(_ultima_sessao_s)
+            _ultima_sessao_s = 0.0
+        _estado_anterior = aceso
         return
 
     valor = _parse_leitura(msg.payload)

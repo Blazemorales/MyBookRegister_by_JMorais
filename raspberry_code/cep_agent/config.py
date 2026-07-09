@@ -19,6 +19,17 @@ MQTT_TOPICO_LAMPADA = os.environ.get("MQTT_TOPICO_LAMPADA", "jmorais/lampada/ses
 MQTT_TOPICO_STATUS_LAMPADA = os.environ.get(
     "MQTT_TOPICO_STATUS_LAMPADA", "jmorais/lampada/status"
 )
+# Tópicos publicados diretamente pelo firmware atual da ESP32
+# (codigo_esp.ino) — plain "ON"/"OFF" (retained) e segundos da sessão
+# atual. Uso preferencial: MQTT_TOPICO_STATUS_LAMPADA/MQTT_TOPICO_LAMPADA
+# acima só têm dado se o lampada_stats.py (pipeline legado via POST
+# /lampada) estiver recebendo eventos, o que o firmware atual não faz.
+MQTT_TOPICO_ESTADO_ESP32 = os.environ.get(
+    "MQTT_TOPICO_ESTADO_ESP32", "mbrlamp/lampada/estado"
+)
+MQTT_TOPICO_TEMPO_SESSAO_ESP32 = os.environ.get(
+    "MQTT_TOPICO_TEMPO_SESSAO_ESP32", "mbrlamp/lampada/tempo_sessao_s"
+)
 
 # Credenciais/TLS — obrigatório quando o agente roda fora da LAN da Pi
 # (ex.: Render) e o broker precisa ficar exposto na internet.
