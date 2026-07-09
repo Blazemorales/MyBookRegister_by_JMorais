@@ -15,13 +15,14 @@ export async function backendAuthHeader(): Promise<HeadersInit> {
 export function backendBaseUrl(): string {
   const url = process.env.CEP_API_URL;
   if (!url) throw new Error("CEP_API_URL não definida");
-  return url;
+  return url.replace(/\/+$/, "");
 }
 
 // URL pública da Raspberry Pi (nginx + Cloudflare Tunnel) — serve a página
 // de controle da ESP32 (/on, /off) e, sob /cep-agent/, o cep-agent local.
 export function raspberryBaseUrl(): string {
-  return process.env.RASPBERRY_LAMPADA_URL ?? "https://raspberry.mbrlamp.com.br";
+  const url = process.env.RASPBERRY_LAMPADA_URL ?? "https://raspberry.mbrlamp.com.br";
+  return url.replace(/\/+$/, "");
 }
 
 // Mesmo valor do RPI_DEVICE_TOKEN configurado no cep-agent da Pi — exigido
