@@ -1,0 +1,94 @@
+MYBOOKREGISTER — RESUMO DO PROJETO
+====================================
+
+O QUE É ESSE PROJETO, EM UMA FRASE
+-----------------------------------
+Um sistema que liga/desliga uma lâmpada de qualquer lugar do mundo pelo
+celular ou computador, e ao mesmo tempo usa os dados dessa lâmpada
+(temperatura do ambiente e tempo de uso) para ensinar, na prática,
+como fábricas monitoram a qualidade de seus processos de produção.
+
+
+A IDEIA POR TRÁS
+-----------------
+Este é um projeto acadêmico que junta duas coisas que normalmente
+ficam em disciplinas separadas:
+
+1. Um projeto de eletrônica/IoT: uma placa pequena (ESP32) com um
+   sensor de temperatura e um relé que liga uma lâmpada, tudo
+   acessível pela internet.
+
+2. Um projeto de Controle Estatístico de Processo (CEP): a técnica
+   que indústrias usam para saber se uma linha de produção está
+   funcionando dentro do esperado ou se algo saiu do controle — os
+   famosos "gráficos de controle" com uma linha central e limites
+   superior/inferior.
+
+A lâmpada serve como um "processo de fábrica" em miniatura: em vez de
+medir o peso de um produto saindo de uma esteira, o sistema mede a
+temperatura do ambiente a cada poucos segundos e o tempo que a
+lâmpada fica ligada em cada uso. Esses números alimentam os mesmos
+cálculos estatísticos que uma fábrica de verdade usaria.
+
+
+COMO FUNCIONA, PASSO A PASSO
+-----------------------------
+1. Uma placa ESP32 (do tamanho de um cartão de crédito) fica ligada a
+   um sensor de temperatura e a um relé que controla a lâmpada. Ela
+   mesma hospeda uma páginazinha web com botões "Ligar" e "Desligar".
+
+2. Uma Raspberry Pi (um mini-computador) fica em casa, na mesma rede
+   da ESP32. Ela faz duas coisas: (a) recebe as leituras de
+   temperatura e os eventos de liga/desliga da lâmpada, e repassa tudo
+   para a internet; (b) mantém um "túnel" seguro que permite acessar
+   a página de controle da lâmpada de qualquer lugar do mundo, sem
+   precisar mexer no roteador de casa.
+
+3. Um serviço na nuvem recebe esses dados, guarda num banco de dados
+   e faz os cálculos estatísticos — média, limites de controle,
+   detecção de pontos fora do padrão, capacidade do processo, etc.
+   Esse mesmo serviço também controla o login dos usuários.
+
+4. Um site (o "MyBookRegister") mostra tudo isso de forma visual:
+   gráficos em tempo real da temperatura, o histórico de uso da
+   lâmpada, relatórios diários e mensais em PDF, e os próprios botões
+   de ligar/desligar a lâmpada remotamente.
+
+Uma vez por dia (de madrugada) o sistema fecha um relatório
+automático do dia anterior — como uma fábrica que imprime o boletim
+de qualidade no fim do turno. Também é possível gerar esse relatório
+na hora, clicando num botão no site.
+
+
+PARA QUEM É
+------------
+- Para o próprio autor, como entrega de trabalhos de duas disciplinas
+  (eletrônica embarcada e controle estatístico de processo).
+- Para quem quiser controlar remotamente um dispositivo elétrico
+  simples de casa (a lâmpada), como aplicação prática.
+- Como material de estudo de como um sistema real de IoT + análise de
+  dados é montado, do sensor até o gráfico na tela.
+
+
+O QUE NÃO É
+------------
+- Não é um produto comercial nem um sistema de segurança residencial.
+- Não substitui um sistema industrial de CEP de verdade — os
+  princípios estatísticos aplicados são os mesmos, mas a "linha de
+  produção" aqui é só uma lâmpada de teste.
+
+
+ONDE CADA PARTE FICA (SEM DETALHE TÉCNICO)
+--------------------------------------------
+- A "placa com o sensor e o relé" fica dentro do circuito físico da
+  lâmpada.
+- O "mini-computador que faz a ponte" é a Raspberry Pi, em casa.
+- O "cérebro que calcula as estatísticas e guarda os dados" roda numa
+  nuvem (serviço externo), sempre disponível, independente da casa
+  estar com a internet ligada.
+- O "site que você acessa no navegador" também roda numa nuvem
+  separada, e é o que qualquer pessoa vê ao abrir o link do projeto.
+
+Essa separação existe justamente para que o site e os dados fiquem no
+ar mesmo que o computador de casa seja desligado — só o controle
+físico da lâmpada em si depende da Raspberry Pi estar ligada.
