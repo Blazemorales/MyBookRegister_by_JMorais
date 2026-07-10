@@ -46,7 +46,7 @@ Depois de confirmar que o broker responde, valide o caminho completo
 
 ```bash
 python3 mqtt_test.py            # broker em localhost
-python3 mqtt_test.py 192.168.0.42   # broker em outro IP
+python3 mqtt_test.py 192.168.0.7    # broker em outro IP
 ```
 
 ## 2. API de controle (`control_led.py`)

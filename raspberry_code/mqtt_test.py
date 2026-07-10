@@ -5,7 +5,7 @@ Instalar dependência: pip install paho-mqtt
 
 Uso:
   python3 mqtt_test.py                    # usa localhost
-  python3 mqtt_test.py 192.168.0.42       # usa IP externo
+  python3 mqtt_test.py 192.168.0.7        # usa IP externo
 """
 
 import sys
